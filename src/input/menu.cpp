@@ -56,7 +56,7 @@ void handleMenuSystem(
       }
       else if (currentMode == EDIT_PULSE) {
         long lastPulseWidth = pulseWidth;
-        pulseWidth = constrain(pulseWidth + diff * 1000, 1000, 500000);
+        pulseWidth = constrain(pulseWidth - diff * 1000, 1000, 500000);
         if (pulseWidth != lastPulseWidth)
         {
           needsRedraw = true;

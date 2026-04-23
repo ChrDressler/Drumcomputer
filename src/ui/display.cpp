@@ -18,6 +18,14 @@ void updateDisplay(
 ) {
   static int lastMenuIndex = -1;
   static MenuMode lastMode = (MenuMode)-1;
+  const char* menuItems[] = {
+    "Play: BPM, Swing",
+    "Pattern",
+    "Pulsbreite",
+    "Info"
+  };
+  const int numMenuItems = 4; // Anzahl der Einträge
+  const int pfeilZeichen = 126; // ASCII-Code für das Pfeilzeichen (>) auf dem LCD
 
   if (currentMode == PLAY)
   {
@@ -27,9 +35,7 @@ void updateDisplay(
   {
     if (!needsRedraw) return;  
   }
-  // if (currentMode != PLAY && !needsRedraw && (currentMode == MENU_ROOT && lastMenuIndex == menuIndex)) return;
-  //if (currentMode == PLAY && (millis() - lastDisplayUpdate < 250)) return;
-
+  
   if (currentMode != lastMode) {
     lcd.clear();
     lastMode = currentMode;
@@ -40,10 +46,14 @@ void updateDisplay(
 
   if (currentMode == MENU_ROOT) {
     if (needsRedraw) {
-      lcd.setCursor(0, 0); lcd.print(menuIndex == 0 ? "> " : "  "); lcd.print("Anzeige BPM, Swing");
-      lcd.setCursor(0, 1); lcd.print(menuIndex == 1 ? "> " : "  "); lcd.print("Patterns");
-      lcd.setCursor(0, 2); lcd.print(menuIndex == 2 ? "> " : "  "); lcd.print("Pulsbreite...");
-      lcd.setCursor(0, 3); lcd.print(menuIndex == 3 ? "> " : "  "); lcd.print("Info");
+      for (int i = 0; i < numMenuItems; i++) {
+        lcd.setCursor(0, i);
+        if (menuIndex == i) lcd.write(pfeilZeichen);
+        else lcd.print(" ");
+
+        lcd.print(" "); 
+        lcd.print(menuItems[i]);
+      }
       lastMenuIndex = menuIndex;
       needsRedraw = false;
     }
@@ -64,7 +74,7 @@ void updateDisplay(
     lcd.setCursor(0, 0); lcd.print("- EDIT Pulsbreite");
     lcd.setCursor(0, 1); lcd.print("Pulsbreite: ");
     lcd.print((int)(pulseWidth / 1000));
-    lcd.print(" ms       ");
+    lcd.print(" ms     ");
     needsRedraw = false;
 
     Serial.print("pw: ");
@@ -85,9 +95,12 @@ void updateDisplay(
       char bankName[19];
       for (int i = 0; i < 4; i++) {
         int bankIdx = startIdx + i;
+        
         lcd.setCursor(0, i);
-        if (bankIdx == currentBank) lcd.print("> ");
-        else lcd.print("  ");
+        if (bankIdx == currentBank) lcd.write(pfeilZeichen);
+        else lcd.print(" ");
+        lcd.print(" ");
+
         if (bankIdx < NUM_BANKS) {
           // Fetch bank label from PROGMEM into a small stack buffer for LCD output.
           getBankName((uint8_t)bankIdx, bankName, sizeof(bankName));
