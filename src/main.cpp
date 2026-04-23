@@ -109,7 +109,7 @@ void loop() {
   // 2. Potis (Nur alle 30ms, sehr wichtig!)
   if (millis() - state.lastPotRead > 30) {
     state.lastPotRead = millis();
-    state.bpm = map(analogRead(potPinBPM), 0, 1023, 40, 200);
+    state.bpm = (int)map(analogRead(potPinBPM), 0, 1023, 40, 200);
     state.swingAmount = (analogRead(potPinSwing) / 1023.0) * 0.4;
   }
 
