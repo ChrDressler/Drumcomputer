@@ -1,0 +1,486 @@
+
+// ==========================================
+// Datei: sequencer.cpp
+// ==========================================
+
+#include "core/sequencer.h"
+
+#include "core/app_config.h"
+#include "data/banks.h"
+
+void runSequencer(
+  unsigned long now,
+  int bpm,
+  float swingAmount,
+  int currentBank,
+  const uint8_t probability[8],
+  long pulseWidth,
+  int& globalStep,
+  unsigned long& lastBeatTime,
+  unsigned long& ledOffTime,
+  unsigned long& lastStepTime,
+  unsigned long& triggerOffTime,
+  bool& triggersActive
+) {
+  unsigned long t = 60000000UL / bpm;
+  unsigned long base_step = t / 4;
+  unsigned long swing_offset = base_step * swingAmount;
+  bool is_second_step = (globalStep % 2 == 1);
+  unsigned long step_duration = is_second_step ? (base_step + swing_offset) : (base_step - swing_offset);
+
+  if (now - lastBeatTime >= t) {
+    lastBeatTime = now;
+    digitalWrite(13, HIGH);
+    ledOffTime = now + 20000;
+  }
+  if (now >= ledOffTime) digitalWrite(13, LOW);
+
+  if (now - lastStepTime >= step_duration) {
+    lastStepTime = now;
+    int current_bar = globalStep / 16;
+    int local_step = globalStep % 16;
+    uint8_t active_mask_d = 0;
+    uint8_t active_mask_b = 0;
+
+    for (int ch = 0; ch < 8; ch++) {
+      // Read the current step pattern from flash (banks table is in PROGMEM).
+      uint16_t patternWord = getBankPatternWord((uint8_t)currentBank, (uint8_t)ch, (uint8_t)current_bar);
+      if ((patternWord >> (15 - local_step)) & 1) {
+        if (random(0, 101) <= probability[ch]) {
+          int pin = trigPins[ch];
+          if (pin <= 7) active_mask_d |= (1 << pin);
+          else active_mask_b |= (1 << (pin - 8));
+        }
+      }
+    }
+
+    if (active_mask_d || active_mask_b) {
+      PORTD &= ~active_mask_d;
+      PORTB &= ~active_mask_b;
+      triggerOffTime = now + pulseWidth;
+      triggersActive = true;
+    }
+    globalStep = (globalStep + 1) % 64;
+  }
+
+  if (triggersActive && now >= triggerOffTime) {
+    PORTD |= 0b11111100;
+    PORTB |= 0b00000011;
+    triggersActive = false;
+  }
+}
+
+
+
+// ==========================================
+// Datei: banks.cpp
+// ==========================================
+
+#include "data/banks.h"
+
+#include <avr/pgmspace.h>
+#include <string.h>
+
+// Preset banks are static assets and live in program flash (PROGMEM) to save SRAM.
+const Bank banks[] PROGMEM = {
+  { "Rumba",       { {0b1000000010000000, 0b1000000010000010, 0b1000000010000000, 0b1000101011001111}, {0b1000001010000010, 0b1000001010000010, 0b0010100000101010, 0b0000000000000000}, {0b0010010000100100, 0b0010010010100110, 0b0010010000100100, 0b1010110000000000}, {0b1001000100101000, 0b1001000100101000, 0b1001000100101000, 0b0000000000000000}, {0b0000100000001000, 0b0000100000001000, 0b0101010101010101, 0b1111111111111111}, {0b1000000000000000, 0b0000000010000000, 0b1000000000000000, 0b1010101000000000}, {0b1111111111111111, 0b1111111111111111, 0b1111111111111111, 0b1111110000000000}, {0, 0, 0, 0} } },
+  { "Classic Rock",{ {0b1000000010100000, 0b1000000010000000, 0b1000000010100000, 0b1000100010001010}, {0,0,0,0b0000000000000011}, {0,0,0,0b0000000000001100}, {0,0,0,0}, {0b0000100000001000, 0b0000100000001000, 0b0000100000001000, 0b0000100001011111}, {0b1000000000000000, 0,0,0}, {0b1010101010101010, 0b1010101010101010, 0b1010101010101010, 0b1010101010100000}, {0, 0, 0, 0} } },
+  { "Cha-Cha-Cha", { {0b1000000010000000, 0b1000000010000000, 0b1000000010000000, 0b1000000010000000}, {0b0000000000001000, 0b0000000000001000, 0b0000000000001000, 0b0000000000001000}, {0b0000000000000110, 0b0000000000000110, 0b0000000000000110, 0b0000000000000110}, {0b1000100010001000, 0b1000100010001000, 0b1000100010001000, 0b1000100010001000}, {0b0000100000000000, 0b0000100000000000, 0b0000100000000000, 0b0000100000000000}, {0b1000000000000000, 0,0,0}, {0b1000100010001000, 0b1000100010001000, 0b1000100010001000, 0b1000100010001000}, {0, 0, 0, 0} } },
+  { "Techno",      { {0b1000100010001000, 0b1000100010001000, 0b1000100010001000, 0b1000100010001011}, {0b0010001000100010, 0b0010001000100010, 0b0010001000100010, 0b0010001000100010}, {0b0000000001000000, 0b0000010000000000, 0b0000000001000000, 0b0101000000000000}, {0, 0b0000000100000000, 0, 0b0000101010101010}, {0b0000100000001000, 0b0000100000001000, 0b0000100000001000, 0b0000100000001000}, {0b1000000000000000, 0, 0b1000000000000000, 0}, {0b1111111111111111, 0b1111111111111111, 0b1111111111111111, 0b1111111111110000}, {0, 0, 0, 0} } },
+  { "Crash vs HH", { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0b1000000100000000, 0b1000000100000000, 0b1000000100000000, 0b1000000100000000}, {0b0000100000001000, 0b0000100000001000, 0b0000100000001000, 0b0000100000001000}, {0b1010101010101010, 0b1010101010101010, 0b1010101010101010, 0b1010101010101010} } },
+  { "For on the Floor", {
+      {0b1000100010001000,0b1000100010001000,0b1000100010001000,0b1000100010001000},
+      {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} } },
+  { "Reggae", {
+      { 0b1000000010000000, 0b1000000010000000, 0b1000000010000000, 0b1000000010000000 },
+      { 0, 0, 0, 0 },
+      { 0, 0, 0, 0 },
+      { 0b0000100000001000, 0b0000100000001000, 0b0000100000001000, 0b0000100000001010 },
+      { 0b0000000010000000, 0b0000000010000000, 0b0000000010000000, 0b0000000010000000 },
+      { 0b1000000000000000, 0, 0, 0 },
+      { 0b1010101010101010, 0b1010101010101010, 0b1010101010101010, 0b1010101010101010 },
+      { 0, 0, 0, 0 }
+    }
+  }
+};
+
+const int NUM_BANKS = sizeof(banks) / sizeof(banks[0]);
+
+uint16_t getBankPatternWord(uint8_t bankIndex, uint8_t channel, uint8_t bar) {
+  // Direct flash read: avoids copying the full banks table to SRAM.
+  return pgm_read_word(&(banks[bankIndex].patterns[channel][bar]));
+}
+
+void getBankName(uint8_t bankIndex, char* outName, size_t outSize) {
+  if (outSize == 0) return;
+
+  // Wichtig: Der Name liegt in PROGMEM. Hier darf nicht einfach ein char*-Pointer aus dem RAM
+  // verwendet werden, sondern es muss mit strncpy_P() direkt aus dem Flash kopiert werden.
+  // Das vermeidet wirre Anzeigeausgaben durch falsche Pointer- oder Speicherzugriffe.
+  strncpy_P(outName, banks[bankIndex].name, outSize - 1);
+  outName[outSize - 1] = '\0';
+}
+
+
+
+// ==========================================
+// Datei: menu.cpp
+// ==========================================
+
+#include "input/menu.h"
+
+#include <EEPROM.h>
+
+#include "data/banks.h"
+
+void handleMenuSystem(
+  Encoder& encoder,
+  MenuMode& currentMode,
+  int& menuIndex,
+  bool& needsRedraw,
+  long& oldEncoderPos,
+  int& currentBank,
+  long& pulseWidth,
+  bool& lastBtnState
+) {
+  bool btnState = digitalRead(selectBtn);
+
+  if (btnState == LOW && lastBtnState == HIGH) {
+    if (currentMode == MENU_ROOT) {
+      if (menuIndex == 0) currentMode = PLAY;
+      else if (menuIndex == 1) currentMode = EDIT_BANK;
+      else if (menuIndex == 2) currentMode = EDIT_PULSE;
+      else if (menuIndex == 3) currentMode = INFO;
+      needsRedraw = true;
+      oldEncoderPos = encoder.read();
+    }
+    else if (currentMode == EDIT_BANK) {
+      EEPROM.update(bankAddr, currentBank);
+
+      currentMode = MENU_ROOT;
+      oldEncoderPos = encoder.read();
+    }
+    else {
+      currentMode = MENU_ROOT;
+      oldEncoderPos = encoder.read();
+    }
+    needsRedraw = true;
+    delay(50);
+  }
+  lastBtnState = btnState;
+
+  long newPos = encoder.read();
+
+  if (abs(newPos - oldEncoderPos) >= ENCODER_STEPS) {
+    int diff = (newPos - oldEncoderPos) / ENCODER_STEPS;
+
+    if (diff != 0) {
+      if (currentMode == MENU_ROOT) {
+        menuIndex = constrain(menuIndex + diff, 0, 3);
+        needsRedraw = true;
+      }
+      else if (currentMode == EDIT_BANK) {
+        currentBank = constrain(currentBank + diff, 0, NUM_BANKS - 1);
+        needsRedraw = true;
+      }
+      else if (currentMode == EDIT_PULSE) {
+        long lastPulseWidth = pulseWidth;
+        pulseWidth = constrain(pulseWidth - diff * 1000, 1000, 500000);
+        if (pulseWidth != lastPulseWidth)
+        {
+          needsRedraw = true;
+        }
+      }
+
+      oldEncoderPos = newPos;
+    }
+  }
+}
+
+
+
+// ==========================================
+// Datei: display.cpp
+// ==========================================
+
+#include "ui/display.h"
+
+#include <string.h>
+
+#include "data/banks.h"
+
+void updateDisplay(
+  LiquidCrystal_I2C& lcd,
+  MenuMode currentMode,
+  int menuIndex,
+  bool& needsRedraw,
+  unsigned long& lastDisplayUpdate,
+  int bpm,
+  float swingAmount,
+  long pulseWidth,
+  int currentBank,
+  int& lastBank
+) {
+  static int lastMenuIndex = -1;
+  static MenuMode lastMode = (MenuMode)-1;
+  const char* menuItems[] = {
+    "Play: BPM, Swing",
+    "Pattern",
+    "Pulsbreite",
+    "Info"
+  };
+  const int numMenuItems = 4; // Anzahl der Einträge
+  const int pfeilZeichen = 126; // ASCII-Code für das Pfeilzeichen (>) auf dem LCD
+
+  if (currentMode == PLAY)
+  {
+    if (millis() - lastDisplayUpdate < 250) return;     
+  }
+  else
+  {
+    if (!needsRedraw) return;  
+  }
+  
+  if (currentMode != lastMode) {
+    lcd.clear();
+    lastMode = currentMode;
+    needsRedraw = true;
+  }
+
+  lastDisplayUpdate = millis();
+
+  if (currentMode == MENU_ROOT) {
+    if (needsRedraw) {
+      for (int i = 0; i < numMenuItems; i++) {
+        lcd.setCursor(0, i);
+        if (menuIndex == i) lcd.write(pfeilZeichen);
+        else lcd.print(" ");
+
+        lcd.print(" "); 
+        lcd.print(menuItems[i]);
+      }
+      lastMenuIndex = menuIndex;
+      needsRedraw = false;
+    }
+    else if (menuIndex != lastMenuIndex) {
+      lcd.setCursor(0, lastMenuIndex); lcd.print("  ");
+      lcd.setCursor(0, menuIndex);     lcd.print("> ");
+      lastMenuIndex = menuIndex;
+    }
+  }
+  else if (currentMode == PLAY) {
+    lcd.setCursor(0, 0); lcd.print("- PLAY MODE ---   ");
+    lcd.setCursor(0, 1); lcd.print("BPM:   "); lcd.print(bpm);
+    lcd.setCursor(0, 2); lcd.print("Swing: "); lcd.print((int)(swingAmount * 100));
+    lcd.print("%   ");
+    needsRedraw = false;
+  }
+  else if (currentMode == EDIT_PULSE) {
+    lcd.setCursor(0, 0); lcd.print("- EDIT Pulsbreite");
+    lcd.setCursor(0, 1); lcd.print("Pulsbreite: ");
+    lcd.print((int)(pulseWidth / 1000));
+    lcd.print(" ms     ");
+    needsRedraw = false;
+
+    Serial.print("pw: ");
+    Serial.println(pulseWidth);
+  }
+  else if (currentMode == INFO) {
+    if (needsRedraw) {
+      lcd.setCursor(0, 0); lcd.print("*** Drumcomputer ***");
+      lcd.setCursor(0, 1); lcd.print("Christoph Dressler  ");
+      lcd.setCursor(0, 2); lcd.print("Soundmodule: 09/1998");
+      lcd.setCursor(0, 3); lcd.print("Ansteuerung: 2026   ");
+      needsRedraw = false;
+    }
+  }
+  else if (currentMode == EDIT_BANK) {
+    if (currentBank != lastBank || needsRedraw) {
+      int startIdx = (currentBank >= 4) ? (currentBank - 3) : 0;
+      char bankName[19];
+      for (int i = 0; i < 4; i++) {
+        int bankIdx = startIdx + i;
+        
+        lcd.setCursor(0, i);
+        if (bankIdx == currentBank) lcd.write(pfeilZeichen);
+        else lcd.print(" ");
+        lcd.print(" ");
+
+        if (bankIdx < NUM_BANKS) {
+          // Fetch bank label from PROGMEM into a small stack buffer for LCD output.
+          getBankName((uint8_t)bankIdx, bankName, sizeof(bankName));
+          lcd.print(bankName);
+          int remainingChars = 18 - strlen(bankName);
+          for (int j = 0; j < remainingChars; j++) lcd.print(" ");
+        }
+        else {
+          lcd.print("                  ");
+        }
+      }
+      lastBank = currentBank;
+      needsRedraw = false;
+    }
+  }
+}
+
+
+
+// ==========================================
+// Datei: main.cpp
+// ==========================================
+
+/*
+ * 8-Kanal Drum-Computer (Nano Version) - FINAL MIT BANK-NAMEN
+ * Kanal 1 Bassdrum
+ * Kanal 2 Low Tom
+ * Kanal 3 High Tom
+ * Kanal 4 Claves
+ * Kanal 5 Sare
+ * Kanal 6 Cymbal
+ * Kanal 7 Hihat
+ * Kanal 8 (nicht benutzen, später Cowbell)
+ * ------------------------------------------
+ */
+
+/*
+Trigger: Pins 2 bis 9 (das sind 8 Pins)
+Frei Deine freien Pins sind: A0 und A3. 
+A4/A5 sind I2C für das Display, 
+A1/A2 sind Potis.
+todo: Start/Stop-Button auf Pin A0
+*/
+
+#include <LiquidCrystal_I2C.h>
+#include <Encoder.h>
+#include <EEPROM.h>
+#include "core/app_config.h"
+#include "core/app_state.h"
+#include "data/banks.h"
+#include "ui/display.h"
+#include "input/menu.h"
+#include "core/sequencer.h"
+
+LiquidCrystal_I2C MenuDisplay(0x27, 20, 4);
+Encoder MenuEncoder(12, 11);
+
+static AppState makeDefaultAppState() {
+  AppState s{};
+  s.currentMode = MENU_ROOT;
+  s.menuIndex = 0;
+  s.needsRedraw = true;
+
+  s.pulseWidth = 10000;
+  s.probability[0] = 100;
+  s.probability[1] = 82;
+  s.probability[2] = 78;
+  s.probability[3] = 100;
+  s.probability[4] = 92;
+  s.probability[5] = 100;
+  s.probability[6] = 80;
+  s.probability[7] = 100;
+  s.lastBank = 0;
+  s.currentBank = 0;
+
+  s.lastBtnState = HIGH;
+  s.oldEncoderPos = 0;
+
+  s.lastStepTime = 0;
+  s.lastPotRead = 0;
+  s.lastBeatTime = 0;
+  s.ledOffTime = 0;
+  s.triggerOffTime = 0;
+  s.lastDisplayUpdate = 0;
+
+  s.bpm = 120;
+  s.globalStep = 0;
+  s.swingAmount = 0.0;
+  s.triggersActive = false;
+  return s;
+}
+
+AppState state = makeDefaultAppState();
+
+void setup() {
+  DDRD |= 0b11111100; PORTD |= 0b11111100;
+  DDRB |= 0b00000011; PORTB |= 0b00000011;
+  pinMode(13, OUTPUT);
+  pinMode(selectBtn, INPUT_PULLUP);
+
+  MenuDisplay.init();
+  MenuDisplay.backlight();
+  randomSeed(analogRead(A2)); 
+
+  // Bank aus EEPROM lesen
+  state.currentBank = EEPROM.read(bankAddr);
+
+  // Sicherheit: Wenn der Wert ungültig ist (z.B. bei einem leeren EEPROM steht oft 255 drin),
+  // setze ihn auf einen Standardwert (0).
+  if (state.currentBank < 0 || state.currentBank >= NUM_BANKS) {
+    state.currentBank = 0;
+  }  
+
+  Serial.begin(115200);
+}
+
+void loop() {
+  unsigned long now = micros();
+
+  // 1. Eingaben (Nicht blockierend, da nur bei Flanken aktiv)
+  handleMenuSystem(
+    MenuEncoder,
+    state.currentMode,
+    state.menuIndex,
+    state.needsRedraw,
+    state.oldEncoderPos,
+    state.currentBank,
+    state.pulseWidth,
+    state.lastBtnState
+  );
+
+  // 2. Potis (Nur alle 30ms, sehr wichtig!)
+  if (millis() - state.lastPotRead > 30) {
+    state.lastPotRead = millis();
+    state.bpm = (int)map(analogRead(potPinBPM), 0, 1023, 40, 200);
+    state.swingAmount = (analogRead(potPinSwing) / 1023.0) * 0.4;
+  }
+
+  // 3. SEQUENZER
+  runSequencer(
+    now,
+    state.bpm,
+    state.swingAmount,
+    state.currentBank,
+    state.probability,
+    state.pulseWidth,
+    state.globalStep,
+    state.lastBeatTime,
+    state.ledOffTime,
+    state.lastStepTime,
+    state.triggerOffTime,
+    state.triggersActive
+  );
+
+  // 4. DISPLAY (Erst ganz am Ende, wenn alles andere erledigt ist)
+  updateDisplay(
+    MenuDisplay,
+    state.currentMode,
+    state.menuIndex,
+    state.needsRedraw,
+    state.lastDisplayUpdate,
+    state.bpm,
+    state.swingAmount,
+    state.pulseWidth,
+    state.currentBank,
+    state.lastBank
+  );
+
+  // static long lastTestPos = 0;
+  // long currentTestPos = myEnc.read();
+  // if (currentTestPos != lastTestPos) {
+  //   Serial.print("Encoder Position: ");
+  //   Serial.println(currentTestPos);
+  //   lastTestPos = currentTestPos;
+  // }
+}
+
+

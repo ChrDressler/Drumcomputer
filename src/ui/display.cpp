@@ -29,7 +29,7 @@ void updateDisplay(
 
   if (currentMode == PLAY)
   {
-    if (millis() - lastDisplayUpdate < 250) return;     
+    if (millis() - lastDisplayUpdate < 1000) return;     
   }
   else
   {
@@ -64,10 +64,9 @@ void updateDisplay(
     }
   }
   else if (currentMode == PLAY) {
-    lcd.setCursor(0, 0); lcd.print("- PLAY MODE ---   ");
-    lcd.setCursor(0, 1); lcd.print("BPM:   "); lcd.print(bpm);
-    lcd.setCursor(0, 2); lcd.print("Swing: "); lcd.print((int)(swingAmount * 100));
-    lcd.print("%   ");
+    lcd.setCursor(0, 0); lcd.print("- PLAY MODE -");
+    lcd.setCursor(0, 1); lcd.print("BPM:   "); lcd.print(bpm); lcd.print("  ");
+    lcd.setCursor(0, 2); lcd.print("Swing: "); lcd.print((int)(swingAmount * 100)); lcd.print("% ");
     needsRedraw = false;
   }
   else if (currentMode == EDIT_PULSE) {

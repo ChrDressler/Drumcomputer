@@ -7,7 +7,7 @@
  * Kanal 5 Sare
  * Kanal 6 Cymbal
  * Kanal 7 Hihat
- * Kanal 8 (nicht benutzen, später Cowbell)
+ * Kanal 8 Cowbell
  * ------------------------------------------
  */
 
@@ -40,12 +40,12 @@ static AppState makeDefaultAppState() {
 
   s.pulseWidth = 10000;
   s.probability[0] = 100;
-  s.probability[1] = 82;
-  s.probability[2] = 78;
+  s.probability[1] = 100;
+  s.probability[2] = 100;
   s.probability[3] = 100;
-  s.probability[4] = 92;
+  s.probability[4] = 100;
   s.probability[5] = 100;
-  s.probability[6] = 80;
+  s.probability[6] = 100;
   s.probability[7] = 100;
   s.lastBank = 0;
   s.currentBank = 0;
