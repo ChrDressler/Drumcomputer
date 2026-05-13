@@ -6,8 +6,9 @@
  * Kanal 4 Claves
  * Kanal 5 Sare
  * Kanal 6 Cymbal
- * Kanal 7 Hihat
+ * Kanal 7 Closed HH
  * Kanal 8 Cowbell
+ * Kanal 9 Open HH
  * ------------------------------------------
  */
 
