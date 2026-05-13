@@ -1,19 +1,7 @@
 /*
  * 8-Kanal Drum-Computer (Arduino Nano Version) 
- * Kanal 1 Bassdrum
- * Kanal 2 Low Tom
- * Kanal 3 High Tom
- * Kanal 4 Claves
- * Kanal 5 Sare
- * Kanal 6 Cymbal
- * Kanal 7 Closed HH
- * Kanal 8 Cowbell
- * Kanal 9 Open HH
- * ------------------------------------------
- */
-
-/*
-Trigger: Pins 2 bis 9 (das sind 8 Pins)
+ 
+Trigger: Pins 2 bis 9 (das sind 8 Pins), Kanäle siehe Banks.cpp
 A0 Start/Stop
 A3 Frei 
 A4/A5 I2C für das Display, 
