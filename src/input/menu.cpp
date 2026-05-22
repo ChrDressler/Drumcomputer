@@ -26,6 +26,7 @@ void handleMenuSystem(
       else if (menuIndex == 1) currentMode = EDIT_BANK;
       else if (menuIndex == 2) currentMode = EDIT_PULSE;
       else if (menuIndex == 3) currentMode = INFO;
+      else if (menuIndex == 4) currentMode = MIDI_MONITOR;
       needsRedraw = true;
       oldEncoderPos = encoder.read();
     }
@@ -57,7 +58,7 @@ void handleMenuSystem(
 
     if (diff != 0) {
       if (currentMode == MENU_ROOT) {
-        menuIndex = constrain(menuIndex + diff, 0, 3);
+        menuIndex = constrain(menuIndex + diff, 0, 4);
         needsRedraw = true;
       }
       else if (currentMode == EDIT_BANK) {

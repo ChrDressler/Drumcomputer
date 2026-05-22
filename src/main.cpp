@@ -1,7 +1,10 @@
 /*
  * 8-Kanal Drum-Computer (Arduino Nano Version) 
  
-Trigger: Pins 2 bis 9 (das sind 8 Pins), Kanäle siehe Banks.cpp
+D2 ... D9 Trigger8 mal Trigger, Kanäle siehe Banks.cpp
+D11, D12 Rotary Encoder für Menü-Navigation
+D10 Select-Button für Menü-Auswahl
+D13 Onboard-LED als Metronom-Visualisierung (blinkt im Takt
 A0 Start/Stop
 A3 Frei 
 A4/A5 I2C für das Display, 
@@ -11,6 +14,7 @@ A1/A2 Potis.
 #include <LiquidCrystal_I2C.h>
 #include <Encoder.h>
 #include <EEPROM.h>
+#include <MIDI.h>
 #include "core/app_config.h"
 #include "core/app_state.h"
 #include "data/banks.h"
@@ -21,6 +25,14 @@ A1/A2 Potis.
 
 LiquidCrystal_I2C MenuDisplay(0x27, 20, 4);
 Encoder MenuEncoder(12, 11);
+
+// MIDI auf HardwareSerial (Pin 0 = RX, Pin 1 = TX)
+MIDI_CREATE_INSTANCE(HardwareSerial, Serial, MIDI);
+
+// Forward declaration der Callback-Funktionen
+void handleNoteOn(byte channel, byte pitch, byte velocity);
+void handleNoteOff(byte channel, byte pitch, byte velocity);
+const char* noteName(byte note);
 
 static AppState makeDefaultAppState() {
   AppState s{};
@@ -83,7 +95,7 @@ void setup() {
   // Pin-Initialisierung
   DDRD |= 0b11111100; PORTD |= 0b11111100;
   DDRB |= 0b00000011; PORTB |= 0b00000011;
-  pinMode(13, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
   pinMode(selectBtn, INPUT_PULLUP);
   pinMode(A0, INPUT_PULLUP);
 
@@ -108,7 +120,13 @@ void setup() {
     state.pulseWidth = storedPulseWidth;
   }
 
-  Serial.begin(115200);
+  Serial.begin(31250);
+   // MIDI-Callbacks registrieren
+  MIDI.setHandleNoteOn(handleNoteOn);
+  MIDI.setHandleNoteOff(handleNoteOff);
+
+  // MIDI initialisieren
+  MIDI.begin(MIDI_CHANNEL_OMNI);
 }
 
 void loop() {
@@ -134,7 +152,9 @@ void loop() {
     }
   }
 
-  // Viel schlankerer Aufruf:
+  // Eingehende MIDI-Nachrichten verarbeiten (ruft handleNoteOn/handleNoteOff auf)
+  MIDI.read();
+
   runSequencer(
     state.bpm,
     state.swingAmount,
@@ -147,5 +167,40 @@ void loop() {
 
   updateDisplay(MenuDisplay, state.currentMode, state.menuIndex, state.needsRedraw,
                 displayDue, state.bpm, state.swingAmount, state.pulseWidth,
-                state.currentBank, state.lastBank, state.isRunning);
+                state.currentBank, state.lastBank, state.isRunning,
+                state.MidiMsg);                
+}
+
+// Callback: Note On
+void handleNoteOn(byte channel, byte pitch, byte velocity) {
+  snprintf(state.MidiMsg, sizeof(state.MidiMsg),
+           "ON  Ch:%d Note:%d (%s) Vel:%d",
+           channel, pitch, noteName(pitch), velocity);
+
+  // Nur im MIDI-Monitor-Modus sofort aktualisieren
+  if (state.currentMode == MIDI_MONITOR) {
+    state.needsRedraw = true;
+  }
+}
+
+// Callback: Note Off
+void handleNoteOff(byte channel, byte pitch, byte velocity) {
+  snprintf(state.MidiMsg, sizeof(state.MidiMsg),
+           "OFF Ch:%d Note:%d (%s) Vel:%d",
+           channel, pitch, noteName(pitch), velocity);
+
+  // Nur im MIDI-Monitor-Modus sofort aktualisieren
+  if (state.currentMode == MIDI_MONITOR) {
+    state.needsRedraw = true;
+  }
+}
+
+// Hilfsfunktion: MIDI-Note (0-127) in Notennamen mit Oktave umwandeln
+const char* noteName(byte note) {
+  const char* notes[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+  static char buffer[12];
+  int octave = (note / 12) - 1;
+  int noteIndex = note % 12;
+  sprintf(buffer, "%s%d", notes[noteIndex], octave);
+  return buffer;
 }

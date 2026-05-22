@@ -37,5 +37,6 @@ void updateDisplay(
   long pulseWidth,
   int currentBank,
   int& lastBank,
-  bool isRunning
+  bool isRunning,
+  const char* midiMsg
 );

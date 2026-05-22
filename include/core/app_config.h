@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 
-enum MenuMode { MENU_ROOT, PLAY, EDIT_BANK, EDIT_PULSE, INFO };
+enum MenuMode { MENU_ROOT, PLAY, EDIT_BANK, EDIT_PULSE, INFO, MIDI_MONITOR };
 
 struct Bank {
   // WICHTIG: Der Bankname wird direkt in PROGMEM als festes char-Array gespeichert.

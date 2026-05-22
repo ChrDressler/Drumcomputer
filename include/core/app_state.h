@@ -26,6 +26,8 @@ struct AppState {
   int globalStep;                  // Aktueller Step im 64-Step-Pattern
   float swingAmount;               // Swing-Anteil (0.0 bis 0.4)
 
+  char MidiMsg[64];                  // Letzte MIDI-Nachricht als formatierter String
+
   bool isRunning = false;             // Gibt an, ob der Sequencer läuft (Start/Stop-Status)
   bool lastStartStopBtnState = HIGH;  // Für die Flankenerkennung
 };

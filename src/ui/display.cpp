@@ -10,14 +10,15 @@ const char* kMenuItems[] = {
   "Play: BPM, Swing",
   "Pattern",
   "Pulsbreite",
-  "Info"
+  "Info",
+  "MIDI Monitor"
 };
 
-const int kNumMenuItems = 4;
+const int kNumMenuItems = 5;
 const int kArrowChar = 126;
 
 bool shouldSkipUpdate(MenuMode currentMode, bool needsRedraw, bool playRefreshDue) {
-  if (currentMode == PLAY) {
+  if (currentMode == PLAY || currentMode == MIDI_MONITOR) {
     return !needsRedraw && !playRefreshDue;
   }
 
@@ -30,15 +31,18 @@ void fillLineWithSpaces(LiquidCrystal_I2C& lcd, int fromCol, int lineWidth = 20)
   }
 }
 
+const int kLcdLines = 4;
+
 void drawRootMenuLine(
   LiquidCrystal_I2C& lcd,
-  int line,
+  int lcdLine,
+  int itemIndex,
   int selectedIndex,
   int currentBank,
   bool isRunning
 ) {
-  lcd.setCursor(0, line);
-  if (selectedIndex == line) {
+  lcd.setCursor(0, lcdLine);
+  if (itemIndex == selectedIndex) {
     lcd.write(kArrowChar);
   } else {
     lcd.print(" ");
@@ -46,7 +50,7 @@ void drawRootMenuLine(
 
   lcd.print(" ");
 
-  if (line == 1) {
+  if (itemIndex == 1) {
     lcd.write(isRunning ? 1 : 0);
     lcd.print(" ");
 
@@ -59,8 +63,8 @@ void drawRootMenuLine(
     return;
   }
 
-  lcd.print(kMenuItems[line]);
-  const int len = (int)strlen(kMenuItems[line]) + 2;
+  lcd.print(kMenuItems[itemIndex]);
+  const int len = (int)strlen(kMenuItems[itemIndex]) + 2;
   fillLineWithSpaces(lcd, len);
 }
 
@@ -72,9 +76,23 @@ void drawMenuRoot(
   bool& needsRedraw,
   int& lastMenuIndex
 ) {
-  if (needsRedraw) {
-    for (int i = 0; i < kNumMenuItems; i++) {
-      drawRootMenuLine(lcd, i, menuIndex, currentBank, isRunning);
+  // Sichtbaren Ausschnitt berechnen: menuIndex soll in der Mitte sein,
+  // aber nicht über den Anfang/das Ende hinausragen
+  static int scrollOffset = 0;
+  int newScrollOffset = constrain(menuIndex - 1, 0, kNumMenuItems - kLcdLines);
+
+  if (needsRedraw || newScrollOffset != scrollOffset) {
+    scrollOffset = newScrollOffset;
+    lcd.clear();
+    for (int i = 0; i < kLcdLines; i++) {
+      int itemIndex = scrollOffset + i;
+      if (itemIndex < kNumMenuItems) {
+        drawRootMenuLine(lcd, i, itemIndex, menuIndex, currentBank, isRunning);
+      } else {
+        // Leere Zeile am Ende, wenn nicht genug Items vorhanden
+        lcd.setCursor(0, i);
+        fillLineWithSpaces(lcd, 0);
+      }
     }
     lastMenuIndex = menuIndex;
     needsRedraw = false;
@@ -82,10 +100,17 @@ void drawMenuRoot(
   }
 
   if (menuIndex != lastMenuIndex) {
-    lcd.setCursor(0, lastMenuIndex);
-    lcd.print("  ");
-    lcd.setCursor(0, menuIndex);
-    lcd.print("> ");
+    // Nur den Pfeil aktualisieren – alte Position löschen, neue setzen
+    int oldLcdLine = lastMenuIndex - scrollOffset;
+    int newLcdLine = menuIndex - scrollOffset;
+    if (oldLcdLine >= 0 && oldLcdLine < kLcdLines) {
+      lcd.setCursor(0, oldLcdLine);
+      lcd.print("  ");
+    }
+    if (newLcdLine >= 0 && newLcdLine < kLcdLines) {
+      lcd.setCursor(0, newLcdLine);
+      lcd.print("> ");
+    }
     lastMenuIndex = menuIndex;
   }
 }
@@ -170,6 +195,18 @@ void drawEditBankMode(
   needsRedraw = false;
 }
 
+void drawMidiMonitorMode(LiquidCrystal_I2C& lcd, const char* midiMsg, bool& needsRedraw) {
+  lcd.setCursor(0, 0);
+  lcd.print("--- MIDI Monitor ---");
+  lcd.setCursor(0, 1);
+  lcd.print("                    ");
+  lcd.setCursor(0, 1);
+  if (midiMsg != nullptr && strlen(midiMsg) > 0) {
+    lcd.print(midiMsg);
+  }
+  needsRedraw = false;
+}
+
 } // namespace
 
 void updateDisplay(
@@ -183,7 +220,8 @@ void updateDisplay(
   long pulseWidth,
   int currentBank,
   int& lastBank,
-  bool isRunning
+  bool isRunning,
+  const char* midiMsg
 ) {
   static int lastMenuIndex = -1;
   static MenuMode lastMode = (MenuMode)-1;
@@ -212,5 +250,8 @@ void updateDisplay(
   }
   else if (currentMode == EDIT_BANK) {
     drawEditBankMode(lcd, currentBank, lastBank, needsRedraw);
+  }
+  else if (currentMode == MIDI_MONITOR) {
+    drawMidiMonitorMode(lcd, midiMsg, needsRedraw);
   }
 }
