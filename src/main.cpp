@@ -22,6 +22,7 @@ A1/A2 Potis.
 #include "input/menu.h"
 #include "core/sequencer.h"
 #include "core/timer_scheduler.h"
+#include "core/midi_drum.h"
 
 LiquidCrystal_I2C MenuDisplay(0x27, 20, 4);
 Encoder MenuEncoder(12, 11);
@@ -171,6 +172,9 @@ void loop() {
                 state.MidiMsg);                
 }
 
+// Status-Variablen für MIDI-gesteuerte Hi-Hat
+static bool gMidiOhhActive = false;  // True solange OHH-Impuls aktiv ist
+
 // Callback: Note On
 void handleNoteOn(byte channel, byte pitch, byte velocity) {
   snprintf(state.MidiMsg, sizeof(state.MidiMsg),
@@ -180,6 +184,27 @@ void handleNoteOn(byte channel, byte pitch, byte velocity) {
   // Nur im MIDI-Monitor-Modus sofort aktualisieren
   if (state.currentMode == MIDI_MONITOR) {
     state.needsRedraw = true;
+  }
+
+  // MIDI-Trigger nur im Stop-Modus (Sequenzer läuft nicht)
+  if (state.isRunning) return;
+
+  int ch = midiNoteToChannel(pitch);
+  if (ch < 0) return;  // Nicht gemappte Note ignorieren
+
+  if (ch == 8) {
+    // Open Hi-Hat: langen Impuls starten
+    midiTriggerOn(6);  // Gleicher Pin wie CHH (Pin 8)
+    gMidiOhhActive = true;
+  } else if (ch == 6) {
+    // Closed Hi-Hat: OHH beenden, dann CHH starten
+    if (gMidiOhhActive) {
+      midiTriggerOff(6);
+      gMidiOhhActive = false;
+    }
+    midiTriggerOn(6);
+  } else {
+    midiTriggerOn(ch);
   }
 }
 
@@ -192,6 +217,25 @@ void handleNoteOff(byte channel, byte pitch, byte velocity) {
   // Nur im MIDI-Monitor-Modus sofort aktualisieren
   if (state.currentMode == MIDI_MONITOR) {
     state.needsRedraw = true;
+  }
+
+  // MIDI-Trigger nur im Stop-Modus (Sequenzer läuft nicht)
+  if (state.isRunning) return;
+
+  int ch = midiNoteToChannel(pitch);
+  if (ch < 0) return;  // Nicht gemappte Note ignorieren
+
+  if (ch == 8) {
+    // Open Hi-Hat: Impuls beenden
+    midiTriggerOff(6);
+    gMidiOhhActive = false;
+  } else if (ch == 6) {
+    // Closed Hi-Hat: CHH beenden, OHH ggf. wieder starten
+    // OHH wird durch CHH beendet – wenn OHH noch aktiv war, bleibt Pin aus
+    midiTriggerOff(6);
+    gMidiOhhActive = false;
+  } else {
+    midiTriggerOff(ch);
   }
 }
 
