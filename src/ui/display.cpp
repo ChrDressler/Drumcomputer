@@ -18,10 +18,12 @@ const int kNumMenuItems = 5;
 const int kArrowChar = 126;
 
 bool shouldSkipUpdate(MenuMode currentMode, bool needsRedraw, bool playRefreshDue) {
-  if (currentMode == PLAY || currentMode == MIDI_MONITOR) {
+  if (currentMode == PLAY) {
     return !needsRedraw && !playRefreshDue;
   }
 
+  // MIDI_MONITOR und alle anderen Modi: Nur bei Bedarf (needsRedraw) aktualisieren,
+  // nicht periodisch. Das verhindert Flackern durch staendige Refreshs.
   return !needsRedraw;
 }
 

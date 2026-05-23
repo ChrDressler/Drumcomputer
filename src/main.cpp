@@ -174,8 +174,8 @@ void loop() {
 // Callback: Note On
 void handleNoteOn(byte channel, byte pitch, byte velocity) {
   snprintf(state.MidiMsg, sizeof(state.MidiMsg),
-           "ON  Ch:%d Note:%d (%s) Vel:%d",
-           channel, pitch, noteName(pitch), velocity);
+           "ON  %d (%s)",
+           pitch, noteName(pitch));
 
   // Nur im MIDI-Monitor-Modus sofort aktualisieren
   if (state.currentMode == MIDI_MONITOR) {
@@ -186,8 +186,8 @@ void handleNoteOn(byte channel, byte pitch, byte velocity) {
 // Callback: Note Off
 void handleNoteOff(byte channel, byte pitch, byte velocity) {
   snprintf(state.MidiMsg, sizeof(state.MidiMsg),
-           "OFF Ch:%d Note:%d (%s) Vel:%d",
-           channel, pitch, noteName(pitch), velocity);
+           "OFF %d",
+           pitch);
 
   // Nur im MIDI-Monitor-Modus sofort aktualisieren
   if (state.currentMode == MIDI_MONITOR) {
