@@ -14,7 +14,6 @@
  * @param oldEncoderPos [in,out] Vorherige Encoderposition zur Delta-Berechnung.
  * @param currentBank [in,out] Aktuell selektierte Bank.
  * @param pulseWidth [in,out] Pulsbreite im Edit-Modus.
- * @param lastBtnState [in,out] Letzter gelesener Zustand des Select-Buttons.
  */
 void handleMenuSystem(
   Encoder& encoder,
@@ -24,16 +23,12 @@ void handleMenuSystem(
   bool& needsRedraw,
   long& oldEncoderPos,
   int& currentBank,
-  long& pulseWidth,
-  bool& lastBtnState,
-  uint32_t& menuDebounceUntilTick
+  long& pulseWidth
 );
 
 void handleStartStop( 
   uint32_t nowTicks,
   bool& isRunning,
-  bool& lastStartStopBtnState, 
   int& globalStep,
-  bool& needsRedraw,
-  uint32_t& startStopDebounceUntilTick
+  bool& needsRedraw
 );

@@ -7,6 +7,10 @@
 #include "core/timer_scheduler.h"
 #include "data/banks.h"
 
+// Entprell-Instanzen für die beiden Taster
+static DebounceButton g_selectBtn(selectBtn);
+static DebounceButton g_startStopBtn(A0);
+
 void handleMenuSystem(
   Encoder& encoder,
   uint32_t nowTicks,
@@ -15,11 +19,9 @@ void handleMenuSystem(
   bool& needsRedraw,
   long& oldEncoderPos,
   int& currentBank,
-  long& pulseWidth,
-  bool& lastBtnState,
-  uint32_t& menuDebounceUntilTick
+  long& pulseWidth
 ) {
-  if (debounceButton(selectBtn, lastBtnState, menuDebounceUntilTick, nowTicks, 50)) {
+  if (g_selectBtn.update(nowTicks)) {
     if (currentMode == MENU_ROOT) {
       if (menuIndex == 0) currentMode = PLAY;
       else if (menuIndex == 1) currentMode = EDIT_BANK;
@@ -79,12 +81,10 @@ void handleMenuSystem(
 void handleStartStop(
   uint32_t nowTicks,
   bool& isRunning,
-  bool& lastStartStopBtnState, 
   int& globalStep,
-  bool& needsRedraw,
-  uint32_t& startStopDebounceUntilTick
+  bool& needsRedraw
 ) {
-  if (debounceButton(A0, lastStartStopBtnState, startStopDebounceUntilTick, nowTicks, 300)) {
+  if (g_startStopBtn.update(nowTicks)) {
     isRunning = !isRunning;
     needsRedraw = true;
 

@@ -5,40 +5,38 @@
 /**
  * @brief Entprellt einen Taster mit Flankenerkennung und stabiler Zustandsprüfung.
  *
- * Erkennt eine fallende Flanke (HIGH->LOW), wartet eine kurze Zeit und prüft
- * dann ob der Taster immer noch gedrückt ist. Das verhindert Fehlauslösungen
- * durch Prellen oder EMV-Einstreuungen.
+ * Einfach eine Instanz pro Taster anlegen und in loop() regelmässig update() aufrufen.
+ * Erkennt eine fallende Flanke (HIGH->LOW), wartet 5ms und prüft dann ob der
+ * Taster immer noch gedrückt ist. Nach erfolgreicher Erkennung wird für 300ms
+ * gesperrt.
  *
- * @param pin GPIO-Pin des Tasters (INPUT_PULLUP).
- * @param lastState [in,out] Letzter gelesener Zustand (für Flankenerkennung).
- * @param debounceUntil [in,out] Tick-Zeitpunkt bis zu dem gesperrt ist.
- * @param nowTicks Aktueller Tick-Zähler (z.B. von timerSchedulerNowTicks()).
- * @param debounceMs Entprellzeit in Millisekunden (z.B. 300ms).
- * @param stableCheckMs Wartezeit für die stabile Zustandsprüfung (z.B. 5ms).
- * @return true wenn der Taster sauber gedrückt wurde (entprellt + stabil).
+ * Beispiel:
+ * @code
+ * DebounceButton startStopBtn(A0);
+ * 
+ * void loop() {
+ *   if (startStopBtn.update(nowTicks)) {
+ *     // Taster wurde sauber gedrückt
+ *   }
+ * }
+ * @endcode
  */
-inline bool debounceButton(
-  int pin,
-  bool& lastState,
-  uint32_t& debounceUntil,
-  uint32_t nowTicks,
-  uint32_t debounceMs,
-  uint32_t stableCheckMs = 5
-) {
-  bool currentState = digitalRead(pin);
+class DebounceButton {
+public:
+  /**
+   * @param pin GPIO-Pin des Tasters (INPUT_PULLUP, muss extern konfiguriert sein).
+   */
+  DebounceButton(int pin);
 
-  // Fallende Flanke erkannt UND Entprellzeit abgelaufen?
-  if (currentState == LOW && lastState == HIGH && (int32_t)(nowTicks - debounceUntil) >= 0) {
-    
-    // Stabile Zustandsprüfung: Kurz warten und nochmal prüfen
-    delay(stableCheckMs);
-    if (digitalRead(pin) == LOW) {
-      lastState = currentState;
-      debounceUntil = nowTicks + (debounceMs * 1000UL / 500UL); // ms in Ticks umrechnen
-      return true;
-    }
-  }
+  /**
+   * @brief Muss regelmässig aufgerufen werden (z.B. in loop()).
+   * @param nowTicks Aktueller Tick-Zähler (z.B. von timerSchedulerNowTicks()).
+   * @return true wenn der Taster sauber gedrückt wurde (entprellt + stabil).
+   */
+  bool update(uint32_t nowTicks);
 
-  lastState = currentState;
-  return false;
-}
+private:
+  int m_pin;
+  bool m_lastState;
+  uint32_t m_debounceUntil;
+};

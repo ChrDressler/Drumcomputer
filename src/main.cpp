@@ -49,13 +49,9 @@ static AppState makeDefaultAppState() {
   s.lastBank = 0;
   s.currentBank = 0;
 
-  s.lastBtnState = HIGH;
   s.oldEncoderPos = 0;
-  s.menuDebounceUntilTick = 0;
-  s.startStopDebounceUntilTick = 0;
 
   s.isRunning = false;
-  s.lastStartStopBtnState = HIGH;  
   s.globalStep = 0; 
   s.bpm = 120;
   s.swingAmount = 0.0;
@@ -131,12 +127,11 @@ void loop() {
   bool potDue = timerSchedulerConsumePotDue();
   bool displayDue = timerSchedulerConsumeDisplayDue();
 
-  handleStartStop(nowTicks, state.isRunning, state.lastStartStopBtnState, 
-                  state.globalStep, state.needsRedraw, state.startStopDebounceUntilTick);
+  handleStartStop(nowTicks, state.isRunning, state.globalStep, state.needsRedraw);
   
   handleMenuSystem(MenuEncoder, nowTicks, state.currentMode, state.menuIndex,
                    state.needsRedraw, state.oldEncoderPos, state.currentBank,
-                   state.pulseWidth, state.lastBtnState, state.menuDebounceUntilTick);
+                   state.pulseWidth);
 
   if (potDue) {
     state.bpm = (int)map(analogRead(potPinBPM), 0, 1023, 40, 200);

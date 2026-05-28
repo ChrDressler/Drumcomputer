@@ -17,17 +17,13 @@ struct AppState {
   int lastBank;                    // Zuletzt angezeigte Bank (für Display-Update)
   int currentBank;                 // Aktuell ausgewählte Bank
 
-  bool lastBtnState;               // Letzter gelesener Zustand des Select-Buttons
   long oldEncoderPos;              // Letzte Encoderposition zur Delta-Berechnung
-  uint32_t menuDebounceUntilTick;  // Sperrzeit fuer Menue-Button-Entprellung
-  uint32_t startStopDebounceUntilTick; // Sperrzeit fuer Start/Stop-Entprellung
 
   int bpm;                         // Aktuelles Tempo in BPM
   int globalStep;                  // Aktueller Step im 64-Step-Pattern
   float swingAmount;               // Swing-Anteil (0.0 bis 0.4)
 
-  char MidiMsg[64];                  // Letzte MIDI-Nachricht als formatierter String
+  char MidiMsg[64];                // Letzte MIDI-Nachricht als formatierter String
 
-  bool isRunning = false;             // Gibt an, ob der Sequencer läuft (Start/Stop-Status)
-  bool lastStartStopBtnState = HIGH;  // Für die Flankenerkennung
+  bool isRunning = false;          // Gibt an, ob der Sequencer läuft (Start/Stop-Status)
 };
