@@ -34,6 +34,9 @@ MIDI_CREATE_INSTANCE(HardwareSerial, Serial, MIDI);
 void handleNoteOn(byte channel, byte pitch, byte velocity);
 void handleNoteOff(byte channel, byte pitch, byte velocity);
 const char* noteName(byte note);
+static void checkMidiTriggerTimers();
+static void midiTriggerOnTimed(int channel, uint32_t pulseWidthUs);
+static void midiTriggerOffNow(int channel);
 
 static AppState makeDefaultAppState() {
   AppState s{};
@@ -156,6 +159,9 @@ void loop() {
   // Eingehende MIDI-Nachrichten verarbeiten (ruft handleNoteOn/handleNoteOff auf)
   MIDI.read();
 
+  // MIDI-Trigger-Timer prüfen: Schaltet Pins nach state.pulseWidth automatisch aus
+  checkMidiTriggerTimers();
+
   runSequencer(
     state.bpm,
     state.swingAmount,
@@ -172,8 +178,51 @@ void loop() {
                 state.MidiMsg);                
 }
 
-// Status-Variablen für MIDI-gesteuerte Hi-Hat
+// --- MIDI-Trigger-Timer (8 Kanäle + OHH) ---
+// Jeder Kanal bekommt einen eigenen Timer (in Mikrosekunden), der den Pin
+// nach state.pulseWidth automatisch wieder ausschaltet.
+// Ein Wert von 0 bedeutet: Kanal ist nicht aktiv (kein Timer läuft).
+static uint32_t gMidiTriggerOffTime[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 static bool gMidiOhhActive = false;  // True solange OHH-Impuls aktiv ist
+
+/**
+ * @brief Prüft, ob MIDI-Trigger-Timer abgelaufen sind, und schaltet die Pins aus.
+ * Wird in loop() aufgerufen.
+ */
+static void checkMidiTriggerTimers() {
+  uint32_t now = micros();
+  
+  for (int ch = 0; ch < 8; ch++) {
+    if (gMidiTriggerOffTime[ch] != 0) {
+      // Timer abgelaufen?
+      if ((int32_t)(now - gMidiTriggerOffTime[ch]) >= 0) {
+        midiTriggerOff(ch);
+        gMidiTriggerOffTime[ch] = 0;
+      }
+    }
+  }
+}
+
+/**
+ * @brief MIDI-Trigger einschalten mit automatischem Timer-Ausschalten.
+ * @param channel Kanalindex (0..7).
+ * @param pulseWidthUs Pulsbreite in Mikrosekunden.
+ */
+static void midiTriggerOnTimed(int channel, uint32_t pulseWidthUs) {
+  if (channel < 0 || channel > 7) return;
+  midiTriggerOn(channel);
+  gMidiTriggerOffTime[channel] = micros() + pulseWidthUs;
+}
+
+/**
+ * @brief MIDI-Trigger sofort ausschalten und Timer löschen.
+ * @param channel Kanalindex (0..7).
+ */
+static void midiTriggerOffNow(int channel) {
+  if (channel < 0 || channel > 7) return;
+  midiTriggerOff(channel);
+  gMidiTriggerOffTime[channel] = 0;
+}
 
 // Callback: Note On
 void handleNoteOn(byte channel, byte pitch, byte velocity) {
@@ -192,19 +241,32 @@ void handleNoteOn(byte channel, byte pitch, byte velocity) {
   int ch = midiNoteToChannel(pitch);
   if (ch < 0) return;  // Nicht gemappte Note ignorieren
 
+  uint32_t pulseUs = (uint32_t)state.pulseWidth;
+
   if (ch == 8) {
-    // Open Hi-Hat: langen Impuls starten
-    midiTriggerOn(6);  // Gleicher Pin wie CHH (Pin 8)
+    // Open Hi-Hat (Note 46): Pin einschalten, OHH-Flag setzen.
+    // KEIN Timer! OHH bleibt aktiv bis CHH (Note 42/44) kommt.
+    // Das ist das Standard-GM-Verhalten: OHH wird durch CHH beendet.
+    midiTriggerOn(6);
     gMidiOhhActive = true;
   } else if (ch == 6) {
-    // Closed Hi-Hat: OHH beenden, dann CHH starten
+    // Hi-Hat (Pin 8 = Kanal 6):
+    // - Note 42 (Closed Hi-Hat): OHH beenden (falls aktiv), dann CHH mit Timer
+    // - Note 44 (Pedal Hi-Hat): OHH beenden (falls aktiv), dann kurzer 5ms-Impuls
     if (gMidiOhhActive) {
-      midiTriggerOff(6);
+      midiTriggerOffNow(6);
+      delay(20); // Sonst triggert dei Closed HH nicht richtig
       gMidiOhhActive = false;
     }
-    midiTriggerOn(6);
+    if (pitch == 44) {
+      // Pedal Hi-Hat: kurzer 2ms-Impuls
+      midiTriggerOnTimed(6, 2000UL);
+    } else {
+      // Closed Hi-Hat (Note 42): Impuls mit state.pulseWidth
+      midiTriggerOnTimed(6, pulseUs);
+    }
   } else {
-    midiTriggerOn(ch);
+    midiTriggerOnTimed(ch, pulseUs);
   }
 }
 
@@ -219,24 +281,12 @@ void handleNoteOff(byte channel, byte pitch, byte velocity) {
     state.needsRedraw = true;
   }
 
-  // MIDI-Trigger nur im Stop-Modus (Sequenzer läuft nicht)
-  if (state.isRunning) return;
-
-  int ch = midiNoteToChannel(pitch);
-  if (ch < 0) return;  // Nicht gemappte Note ignorieren
-
-  if (ch == 8) {
-    // Open Hi-Hat: Impuls beenden
-    midiTriggerOff(6);
-    gMidiOhhActive = false;
-  } else if (ch == 6) {
-    // Closed Hi-Hat: CHH beenden, OHH ggf. wieder starten
-    // OHH wird durch CHH beendet – wenn OHH noch aktiv war, bleibt Pin aus
-    midiTriggerOff(6);
-    gMidiOhhActive = false;
-  } else {
-    midiTriggerOff(ch);
-  }
+  // MIDI-Trigger werden nicht mehr durch Note Off gesteuert!
+  // Die Pulsbreite wird durch den Timer in handleNoteOn bestimmt.
+  // Note Off dient nur noch dem MIDI-Monitor.
+  (void)channel;
+  (void)pitch;
+  (void)velocity;
 }
 
 // Hilfsfunktion: MIDI-Note (0-127) in Notennamen mit Oktave umwandeln
