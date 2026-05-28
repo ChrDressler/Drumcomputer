@@ -5,11 +5,18 @@
 extern AppState state;
 
 // --- MIDI-Trigger-Timer (8 Kanäle + OHH) ---
-// Jeder Kanal bekommt einen eigenen Timer (in Mikrosekunden), der den Pin
+// Jeder Kanal bekommt einen eigenen Timer (in Millisekunden), der den Pin
 // nach state.pulseWidth automatisch wieder ausschaltet.
 // Ein Wert von 0 bedeutet: Kanal ist nicht aktiv (kein Timer läuft).
+// Nutzt millis() statt micros(), da:
+// - Overflow erst nach ~50 Tagen (vs. 70 Minuten bei micros)
+// - Völlig ausreichend für Pulsbreiten im ms-Bereich
+// - Einfacherer Code ohne signed-Cast für Overflow-Handling
 static uint32_t gMidiTriggerOffTime[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 static bool gMidiOhhActive = false;  // True solange OHH-Impuls aktiv ist
+
+// Hi-Hat-Kanal (CHH und OHH teilen sich Pin 8 = Kanal 6)
+static const int kHiHatChannel = 6;
 
 void midiHandlerInit(MIDI_NAMESPACE::MidiInterface<MIDI_NAMESPACE::SerialMIDI<HardwareSerial>>& midiRef) {
   midiRef.setHandleNoteOn(handleNoteOn);
@@ -17,11 +24,12 @@ void midiHandlerInit(MIDI_NAMESPACE::MidiInterface<MIDI_NAMESPACE::SerialMIDI<Ha
 }
 
 void checkMidiTriggerTimers() {
-  uint32_t now = micros();
+  uint32_t now = millis();
   
   for (int ch = 0; ch < 8; ch++) {
     if (gMidiTriggerOffTime[ch] != 0) {
-      // Timer abgelaufen?
+      // Timer abgelaufen? millis()-Overflow ist nach ~50 Tagen,
+      // unsigned wrap-around wird durch Subtraktion korrekt behandelt.
       if ((int32_t)(now - gMidiTriggerOffTime[ch]) >= 0) {
         midiTriggerOff(ch);
         gMidiTriggerOffTime[ch] = 0;
@@ -30,10 +38,10 @@ void checkMidiTriggerTimers() {
   }
 }
 
-void midiTriggerOnTimed(int channel, uint32_t pulseWidthUs) {
+void midiTriggerOnTimed(int channel, uint32_t pulseWidthMs) {
   if (channel < 0 || channel > 7) return;
   midiTriggerOn(channel);
-  gMidiTriggerOffTime[channel] = micros() + pulseWidthUs;
+  gMidiTriggerOffTime[channel] = millis() + pulseWidthMs;
 }
 
 void midiTriggerOffNow(int channel) {
@@ -59,37 +67,40 @@ void handleNoteOn(byte channel, byte pitch, byte velocity) {
   int ch = midiNoteToChannel(pitch);
   if (ch < 0) return;  // Nicht gemappte Note ignorieren
 
-  uint32_t pulseUs = (uint32_t)state.pulseWidth;
+  // state.pulseWidth ist in Mikrosekunden -> in Millisekunden umrechnen
+  uint32_t pulseMs = (uint32_t)state.pulseWidth / 1000UL;
+  if (pulseMs < 1) pulseMs = 1; // Mindestens 1ms
 
   if (ch == 8) {
     // Open Hi-Hat (Note 46): Pin einschalten, OHH-Flag setzen.
     // KEIN Timer! OHH bleibt aktiv bis CHH (Note 42/44) kommt.
     // Das ist das Standard-GM-Verhalten: OHH wird durch CHH beendet.
-    midiTriggerOn(6);
+    midiTriggerOn(kHiHatChannel);
     gMidiOhhActive = true;
-  } else if (ch == 6) {
+  } else if (ch == kHiHatChannel) {
     // Hi-Hat (Pin 8 = Kanal 6):
     // - Note 42 (Closed Hi-Hat): OHH beenden (falls aktiv), dann CHH mit Timer
     // - Note 44 (Pedal Hi-Hat): OHH beenden (falls aktiv), dann kurzer 2ms-Impuls
     if (gMidiOhhActive) {
-      midiTriggerOffNow(6);
+      midiTriggerOffNow(kHiHatChannel);
       delay(20); // Soundmodule brauchen eine HIGH-Pause zwischen Off und On
       gMidiOhhActive = false;
     }
     if (pitch == 44) {
       // Pedal Hi-Hat: kurzer 2ms-Impuls
-      midiTriggerOnTimed(6, 2000UL);
+      midiTriggerOnTimed(kHiHatChannel, 2UL);
     } else {
       // Closed Hi-Hat (Note 42): Impuls mit state.pulseWidth
-      midiTriggerOnTimed(6, pulseUs);
+      midiTriggerOnTimed(kHiHatChannel, pulseMs);
     }
   } else {
-    midiTriggerOnTimed(ch, pulseUs);
+    midiTriggerOnTimed(ch, pulseMs);
   }
 }
 
 // Callback: Note Off
-void handleNoteOff(byte channel, byte pitch, byte velocity) {
+// Ungenutzte Paramter müssen wg MIDI Callback drin bleiben.
+void handleNoteOff(byte channel, byte pitch, byte ) {
   snprintf(state.MidiMsg, sizeof(state.MidiMsg),
            "OFF %d",
            pitch);
@@ -102,9 +113,6 @@ void handleNoteOff(byte channel, byte pitch, byte velocity) {
   // MIDI-Trigger werden nicht mehr durch Note Off gesteuert!
   // Die Pulsbreite wird durch den Timer in handleNoteOn bestimmt.
   // Note Off dient nur noch dem MIDI-Monitor.
-  (void)channel;
-  (void)pitch;
-  (void)velocity;
 }
 
 // Hilfsfunktion: MIDI-Note (0-127) in Notennamen mit Oktave umwandeln

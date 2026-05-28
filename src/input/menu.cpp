@@ -1,4 +1,5 @@
 #include "input/menu.h"
+#include "input/debounce.h"
 
 #include <EEPROM.h>
 
@@ -18,9 +19,7 @@ void handleMenuSystem(
   bool& lastBtnState,
   uint32_t& menuDebounceUntilTick
 ) {
-  bool btnState = digitalRead(selectBtn);
-
-  if (btnState == LOW && lastBtnState == HIGH && (int32_t)(nowTicks - menuDebounceUntilTick) >= 0) {
+  if (debounceButton(selectBtn, lastBtnState, menuDebounceUntilTick, nowTicks, 50)) {
     if (currentMode == MENU_ROOT) {
       if (menuIndex == 0) currentMode = PLAY;
       else if (menuIndex == 1) currentMode = EDIT_BANK;
@@ -47,9 +46,7 @@ void handleMenuSystem(
       oldEncoderPos = encoder.read();
     }
     needsRedraw = true;
-    menuDebounceUntilTick = nowTicks + timerSchedulerMsToTicks(50);
   }
-  lastBtnState = btnState;
 
   long newPos = encoder.read();
 
@@ -87,18 +84,12 @@ void handleStartStop(
   bool& needsRedraw,
   uint32_t& startStopDebounceUntilTick
 ) {
-  
-  bool currentBtn = digitalRead(A0);
-
-  if (currentBtn == LOW && lastStartStopBtnState == HIGH && (int32_t)(nowTicks - startStopDebounceUntilTick) >= 0) {
+  if (debounceButton(A0, lastStartStopBtnState, startStopDebounceUntilTick, nowTicks, 300)) {
     isRunning = !isRunning;
     needsRedraw = true;
 
     if (isRunning) {
       sequencerStart(globalStep);
     }
-
-    startStopDebounceUntilTick = nowTicks + timerSchedulerMsToTicks(150);
   }
-  lastStartStopBtnState = currentBtn;
 }
