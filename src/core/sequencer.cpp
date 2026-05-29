@@ -51,50 +51,74 @@ void runSequencer(
     uint8_t stepsPerBar = getBankStepsPerBar((uint8_t)currentBank);
     int totalSteps = stepsPerBar * 4;     // 64 für 4/4, 48 für 3/4
 
-    // --- 1. MASKIERUNG FÜR DEN AKTUELLEN STEP ---
-    uint8_t d_mask = 0;
-    uint8_t b_mask = 0;
+    // --- 1. AKTIVE KANÄLE FÜR DEN AKTUELLEN STEP BESTIMMEN ---
+    // gNextPinOn[] wird pro Kanal gesetzt (true = Pin soll auslösen)
+    for (int ch = 0; ch < 8; ch++) {
+      gNextPinOn[ch] = false;
+    }
+
     int currentBar = globalStep / stepsPerBar;
     int localStep = globalStep % stepsPerBar;
 
-    // CHH (Kanal 6, Index 6) und OHH (Index 8) vorab prüfen für HH-Logik
-    uint16_t chhWord = getBankPatternWord((uint8_t)currentBank, 6, (uint8_t)currentBar);
-    uint16_t ohhWord = getBankPatternWord((uint8_t)currentBank, 8, (uint8_t)currentBar);
+    // CHH (Kanal 6) und OHH (Index 8) vorab prüfen für HH-Logik
+    // Pattern-Word: Bits 0-15 = Hit-Maske, Bits 16-31 = Dead-Node-Maske
+    uint32_t chhWord = getBankPatternWord((uint8_t)currentBank, 6, (uint8_t)currentBar);
+    uint32_t ohhWord = getBankPatternWord((uint8_t)currentBank, 8, (uint8_t)currentBar);
     bool chhHit = ((chhWord >> (15 - localStep)) & 1) && (random(0, 101) <= probability[6]);
     bool ohhHit = ((ohhWord >> (15 - localStep)) & 1) && (random(0, 101) <= probability[6]);
 
     // Open HH-Logik:
-    // - OHH-Step: langen Impuls starten (Flag setzen, Pin in Maske aufnehmen)
+    // - OHH-Step: langen Impuls starten (Flag setzen, Kanal 6 aktivieren)
     // - CHH-Step: kurzen Impuls ausgeben UND langen OHH-Impuls beenden (Flag loeschen)
     // - Kein HH-Step: OHH-Zustand unveraendert lassen
     if (ohhHit) {
-      // Langen Impuls starten: HH-Pin in Maske aufnehmen, Flag setzen
-      b_mask |= kHiHatMaskB;
+      gNextPinOn[6] = true;
       gHiHatLongPulseActive = true;
     } else if (chhHit) {
-      // CHH beendet OHH: kurzer Impuls, Flag loeschen
-      b_mask |= kHiHatMaskB;
+      gNextPinOn[6] = true;
       gHiHatLongPulseActive = false;
     }
-    // Wenn weder CHH noch OHH: HH-Pin nicht in Maske – OHH-Zustand bleibt erhalten
+    // Wenn weder CHH noch OHH: Kanal 6 nicht aktiv – OHH-Zustand bleibt erhalten
 
     for (int ch = 0; ch < 8; ch++) {
       if (ch == 6) continue; // HH bereits oben behandelt
-      uint16_t patternWord = getBankPatternWord((uint8_t)currentBank, (uint8_t)ch, (uint8_t)currentBar);
+      uint32_t patternWord = getBankPatternWord((uint8_t)currentBank, (uint8_t)ch, (uint8_t)currentBar);
+      // Bits 0-15 = Hit-Maske
       if ((patternWord >> (15 - localStep)) & 1) {
         if (random(0, 101) <= probability[ch]) {
-          int pin = trigPins[ch];
-          if (pin <= 7) d_mask |= (1 << pin);
-          else b_mask |= (1 << (pin - 8));
+          gNextPinOn[ch] = true;
         }
       }
     }
 
-    gNextMaskD = d_mask;
-    gNextMaskB = b_mask;
-    gPulseWidthTicks = timerSchedulerUsToTicks((uint32_t)pulseWidth);
+    // --- 2. PULSBREITEN PRO KANAL SETZEN ---
+    // Dead-Node-Maske ist in Bits 16-31 jedes Kanal-Pattern-Worts
+    // Jeder Kanal kann einzeln ein O haben und bekommt dann gPinDeadNoteTicks[ch]
+    uint32_t pwDefaultTicks = timerSchedulerUsToTicks((uint32_t)pulseWidth);
+    uint32_t pwChhTicks = timerSchedulerUsToTicks(2000UL);
 
-    // --- 2. VORBEREITUNG FÜR DEN NÄCHSTEN SCHLAG ---
+    for (int ch = 0; ch < 8; ch++) {
+      if (ch == 6) {
+        // CHH-Sonderfall: Dead Note aus dem eigenen Pattern-Wort
+        uint32_t chhWordLocal = getBankPatternWord((uint8_t)currentBank, 6, (uint8_t)currentBar);
+        bool chhDead = (chhWordLocal >> (31 - localStep)) & 1;  // Bits 16-31
+        if (chhDead) {
+          gPinPulseWidthTicks[6] = gPinDeadNoteTicks[6];
+        } else {
+          gPinPulseWidthTicks[6] = pwChhTicks;
+        }
+      } else {
+        uint32_t patWord = getBankPatternWord((uint8_t)currentBank, (uint8_t)ch, (uint8_t)currentBar);
+        bool isDead = (patWord >> (31 - localStep)) & 1;  // Bits 16-31 = Dead-Node-Maske
+        if (isDead) {
+          gPinPulseWidthTicks[ch] = gPinDeadNoteTicks[ch];
+        } else {
+          gPinPulseWidthTicks[ch] = pwDefaultTicks;
+        }
+      }
+    }
+
+    // --- 3. VORBEREITUNG FÜR DEN NÄCHSTEN SCHLAG ---
     globalStep = (globalStep + 1) % totalSteps;
 
     // gStepTicks: mit 16tel-Swing für die Trigger-Timings

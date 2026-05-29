@@ -3,21 +3,20 @@
 #include <string.h>
 
 /**
- * --- ZERO-COST PATTERN PARSER ---
- * Diese Funktionen erlauben die Notation von Drum-Patterns als "X...X...".
+ * --- ZERO-COST PATTERN PARSER (32-BIT) ---
  * 
- * FUNKTIONSWEISE:
- * 1. constexpr: Die Umwandlung von Text in Bits geschieht komplett zur KOMPILIERZEIT.
- * 2. Performance: Zur Laufzeit auf dem AVR findet keine Berechnung statt; der Chip 
- *    liest direkt den fertigen 16-Bit-Wert aus dem PROGMEM[cite: 2].
- * 3. Speicher: Da nur das Ergebnis (uint16_t) gespeichert wird, belegen die 
- *    Text-Strings keinen Platz im Flash oder SRAM[cite: 2].
+ * NOTATION: 'X' oder 'x' = normaler Schlag
+ *           'O' oder 'o' = Dead Note (kurzer Impuls)
+ *           '.'          = Pause
  * 
- * NOTATION: 'X' oder 'x' = Schlag (Bit 1), alles andere = Pause (Bit 0).
+ * ERGEBNIS: uint32_t, Bits 0-15 = Hit-Maske
+ *                            (X und O erzeugen ein Bit)
+ *                    Bits 16-31 = Dead-Node-Maske
+ *                            (nur O erzeugt ein Bit)
  * 
- * TAKTART: stepsPerBar = 16 fuer 4/4-Takt, 12 fuer 3/4-Takt.
- *   Bei 3/4 werden nur die unteren 12 Bits des 16-Bit-Worts verwendet
- *   (die restlichen 4 Bits sind Pause).
+ * Beispiel: P("X.O.") liefert
+ *   Hit-Maske (Bits 0-15):      1010... (X + O)
+ *   Dead-Node-Maske (Bits 16-31): 0010... (nur O)
  * 
  * KANALSTRUKTUR (9 Eintraege pro Bank):
  *   Index 0 = Bassdrum   (Pin 2)
@@ -31,18 +30,29 @@
  *   Index 8 = Open HH    (Pin 8) - langer Impuls, wird durch CHH beendet
  */
 
-constexpr uint16_t P_helper(const char* s, int i, uint16_t result) {
+// Hit-Maske (Bits 0-15): 'X', 'x', 'O', 'o' = 1
+constexpr uint32_t P_hit_helper(const char* s, int i, uint32_t result) {
     return (i == 16) ? result : 
-           P_helper(s, i + 1, result | ((s[i] == 'X' || s[i] == 'x') ? (1 << (15 - i)) : 0));
+           P_hit_helper(s, i + 1, result | ((s[i] == 'X' || s[i] == 'x' || s[i] == 'O' || s[i] == 'o') ? (1UL << (15 - i)) : 0));
 }
 
-constexpr uint16_t P(const char* s) {
-    return P_helper(s, 0, 0);
+// Dead-Node-Maske (Bits 16-31): nur 'O', 'o' = 1
+constexpr uint32_t P_dead_helper(const char* s, int i, uint32_t result) {
+    return (i == 16) ? result : 
+           P_dead_helper(s, i + 1, result | ((s[i] == 'O' || s[i] == 'o') ? (1UL << (15 - i)) : 0));
+}
+
+// Kombiniert beide Masken zu einem uint32_t
+constexpr uint32_t P(const char* s) {
+    return P_hit_helper(s, 0, 0) | (P_dead_helper(s, 0, 0) << 16);
 }
 
 // Jede Bank: { "Name", stepsPerBar, { patterns... } }
-// Reihenfolge: BD, LT, HT, CL, SN, CY, CHH, CB, OHH
+// 9 Eintraege: BD, LT, HT, CL, SN, CY, CHH, CB, OHH
 const Bank banks[] PROGMEM = {
+  // --------------------------------------------------
+  // 4/4-TAKT
+  // --------------------------------------------------
   { "Classic Rock", 16, { 
     { P("X.......X.X....."), P("X.......X......."), P("X.......X.X....."), P("X...X...X...X.X.") }, // BD
     { P("................"), P("................"), P("................"), P("..............XX") }, // LT
@@ -128,15 +138,15 @@ const Bank banks[] PROGMEM = {
   }},
 
   { "Four on the Floor", 16, {
-    { P("X...X...X...X..."), P("X...X...X...X..."), P("X...X...X...X..."), P("X...X...X...X...") }, // BD
-    { P("................"), P("................"), P("................"), P("................") }, // LT
+    { P("X...X...X...X..."), P("X...O...X...O..."), P("................"), P("................") }, // BD
+    { P("................"), P("................"), P("................"), P("OOOO...XXXX.....") }, // LT
     { P("................"), P("................"), P("................"), P("................") }, // HT
     { P("................"), P("................"), P("................"), P("................") }, // CL
-    { P("................"), P("................"), P("................"), P("................") }, // SN
+    { P("................"), P("................"), P("OO..XX..OX..OX.."), P("................") }, // SN
     { P("................"), P("................"), P("................"), P("................") }, // CY
-    { P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X.") }, // CHH
+    { P("X.O.X.O.X.O.X.O."), P("................"), P("................"), P("................") }, // CHH
     { P("................"), P("................"), P("................"), P("................") }, // CB
-    { P("...............X"), P("...............X"), P("...............X"), P("...............X") }  // OHH
+    { P("................"), P("................"), P("................"), P("...............X") }  // OHH
   }},
 
   { "Drum & Bass", 16, {
@@ -211,17 +221,17 @@ const Bank banks[] PROGMEM = {
     { P("................"), P("................"), P("................"), P("................") }  // OHH
   }},
 
-   { "Samba", 16, {
-     { P("X...X...X...X..."), P("X...X...X...X..."), P("X...X...X...X..."), P("X...X...X...X...") }, // BD - Surdo: Viertelnoten
-     { P("..X.....X.....X."), P("..X.....X.....X."), P("..X.....X.....X."), P("..X.....X.....X.") }, // LT - Repinique
-     { P("................"), P("................"), P("................"), P("................") }, // HT
-     { P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X.") }, // CL - Tamborim
-     { P("....X.......X..."), P("....X.......X..."), P("....X.......X..."), P("....X.......X...") }, // SN - Caixa
-     { P("X..............."), P("................"), P("X..............."), P("................") }, // CY
-     { P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X.") }, // CHH - Chocalho
-     { P("X...X...X...X..."), P("X...X...X...X..."), P("X...X...X...X..."), P("X...X...X...X...") }, // CB - Agogô
-     { P("..............X."), P("..............X."), P("..............X."), P("..............X.") }  // OHH
-   }},
+  { "Samba", 16, {
+    { P("X...X...X...X..."), P("X...X...X...X..."), P("X...X...X...X..."), P("X...X...X...X...") }, // BD
+    { P("..X.....X.....X."), P("..X.....X.....X."), P("..X.....X.....X."), P("..X.....X.....X.") }, // LT
+    { P("................"), P("................"), P("................"), P("................") }, // HT
+    { P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X.") }, // CL
+    { P("....X.......X..."), P("....X.......X..."), P("....X.......X..."), P("....X.......X...") }, // SN
+    { P("X..............."), P("................"), P("X..............."), P("................") }, // CY
+    { P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X."), P("X.X.X.X.X.X.X.X.") }, // CHH
+    { P("X...X...X...X..."), P("X...X...X...X..."), P("X...X...X...X..."), P("X...X...X...X...") }, // CB
+    { P("..............X."), P("..............X."), P("..............X."), P("..............X.") }  // OHH
+  }},
 
   { "Dubstep Wobble", 16, {
     { P("X.......X......."), P("X.......X......."), P("X.......X......."), P("X...X...X.X.X.X.") }, // BD
@@ -247,7 +257,9 @@ const Bank banks[] PROGMEM = {
     { P("................"), P("................"), P("................"), P("................") }  // OHH
   }},
 
-    // --- 3/4-TAKT ---
+  // --------------------------------------------------
+  // 3/4-TAKT
+  // --------------------------------------------------
   { "Walzer reich", 12, {
     { P("X...X..........."), P("X...X..........."), P("X...X..........."), P("X.X.X...........") }, // BD
     { P("................"), P("................"), P("................"), P("..............X.") }, // LT
@@ -260,7 +272,7 @@ const Bank banks[] PROGMEM = {
     { P("................"), P("................"), P("................"), P("................") }  // OHH
   }},
 
-    { "Walzer simpel", 12, {
+  { "Walzer simpel", 12, {
     { P("X..............."), P("X..............."), P("X..............."), P("X...............") }, // BD
     { P("................"), P("................"), P("................"), P("................") }, // LT
     { P("................"), P("................"), P("................"), P("................") }, // HT
@@ -272,7 +284,7 @@ const Bank banks[] PROGMEM = {
     { P("................"), P("................"), P("................"), P("................") }  // OHH
   }},
 
-    { "Walzer 6/8", 12, {
+  { "Walzer 6/8", 12, {
     { P("X..............."), P("................"), P("X..............."), P("................") }, // BD
     { P("................"), P("................"), P("................"), P("................") }, // LT
     { P("................"), P("................"), P("................"), P("................") }, // HT
@@ -283,7 +295,6 @@ const Bank banks[] PROGMEM = {
     { P("................"), P("................"), P("................"), P("................") }, // CB
     { P("................"), P("................"), P("................"), P("................") }  // OHH
   }},
-
 };
 
 const int NUM_BANKS = sizeof(banks) / sizeof(banks[0]);
@@ -292,8 +303,8 @@ uint8_t getBankStepsPerBar(uint8_t bankIndex) {
   return pgm_read_byte(&(banks[bankIndex].stepsPerBar));
 }
 
-uint16_t getBankPatternWord(uint8_t bankIndex, uint8_t channel, uint8_t bar) {
-  return pgm_read_word(&(banks[bankIndex].patterns[channel][bar]));
+uint32_t getBankPatternWord(uint8_t bankIndex, uint8_t channel, uint8_t bar) {
+  return pgm_read_dword(&(banks[bankIndex].patterns[channel][bar]));
 }
 
 void getBankName(uint8_t bankIndex, char* outName, size_t outSize) {
