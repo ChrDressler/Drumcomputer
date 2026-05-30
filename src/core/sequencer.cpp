@@ -18,7 +18,7 @@ void sequencerStart(int& globalStep) {
 }
 
 uint32_t computeStepTicks(int bpm, float swingAmount, int globalStep) {
-    uint32_t quarterUs = 60000000UL / (uint32_t)bpm;
+    uint32_t quarterUs = US_PER_MINUTE / (uint32_t)bpm;
     uint32_t baseStepUs = quarterUs / 4UL;
     uint32_t swingOffsetUs = (uint32_t)(baseStepUs * swingAmount);
 
@@ -35,13 +35,15 @@ void runSequencer(
   int bpm,
   float swingAmount,
   int currentBank,
-  const uint8_t probability[8],
+  const uint8_t probability[ChMax],
   long pulseWidth,
   int& globalStep,
   bool isRunning
 ) {
   if (!isRunning) {
     gNextStepTick = 0xFFFFFFFF;
+    // Open Hi-Hat beim Stop zurücksetzen, damit kein Impuls hängen bleibt
+    gHiHatLongPulseActive = false;
     return;
   }
 
@@ -53,7 +55,7 @@ void runSequencer(
 
     // --- 1. AKTIVE KANÄLE FÜR DEN AKTUELLEN STEP BESTIMMEN ---
     // gNextPinOn[] wird pro Kanal gesetzt (true = Pin soll auslösen)
-    for (int ch = 0; ch < 8; ch++) {
+    for (int ch = 0; ch < ChMax; ch++) {
       gNextPinOn[ch] = false;
     }
 
@@ -80,7 +82,7 @@ void runSequencer(
     }
     // Wenn weder CHH noch OHH: Kanal ChHH nicht aktiv – OHH-Zustand bleibt erhalten
 
-    for (int ch = 0; ch < 8; ch++) {
+    for (int ch = 0; ch < ChMax; ch++) {
       if (ch == ChHH) continue; // HH bereits oben behandelt
       uint32_t patternWord = getBankPatternWord((uint8_t)currentBank, (uint8_t)ch, (uint8_t)currentBar);
       // Bits 0-15 = Hit-Maske
@@ -101,7 +103,7 @@ void runSequencer(
     uint32_t pwDefaultTicks = timerSchedulerUsToTicks((uint32_t)pulseWidth);
     uint32_t pwChhTicks = 4;  // 2000us / 500us = 4 Ticks
 
-    for (int ch = 0; ch < 8; ch++) {
+    for (int ch = 0; ch < ChMax; ch++) {
       if (!gNextPinOn[ch]) {
         gPwTicks[ch] = 0;
         continue;
@@ -130,7 +132,7 @@ void runSequencer(
     gStepTicks = computeStepTicks(bpm, swingAmount, globalStep);
 
     // gMetronomeTicks: immer straight für die LED
-    uint32_t quarterUs = 60000000UL / (uint32_t)bpm;
+    uint32_t quarterUs = US_PER_MINUTE / (uint32_t)bpm;
     uint32_t baseStepUs = quarterUs / 4UL;
     gMetronomeTicks = timerSchedulerUsToTicks(baseStepUs);
   }

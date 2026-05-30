@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "core/app_config.h"
 
 /**
  * @brief Initialisiert den Sequenzer fuer den Start (Reset globalStep, setzt Timer-Anker).
@@ -27,7 +28,7 @@ void runSequencer(
   int bpm,
   float swingAmount,
   int currentBank,
-  const uint8_t probability[8],
+  const uint8_t probability[ChMax],
   long pulseWidth,
   int& globalStep,
   bool isRunning

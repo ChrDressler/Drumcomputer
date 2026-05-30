@@ -67,7 +67,7 @@ inline int midiNoteToChannel(byte pitch) {
  * @param channel Kanalindex (0..7).
  */
 inline void midiTriggerOn(int channel) {
-    if (channel < 0 || channel > 7) return;
+    if (channel < 0 || channel >= ChMax) return;
     int pin = trigPins[channel];
     if (pin <= 7) {
         PORTD &= ~(1 << pin);
@@ -81,7 +81,7 @@ inline void midiTriggerOn(int channel) {
  * @param channel Kanalindex (0..7).
  */
 inline void midiTriggerOff(int channel) {
-    if (channel < 0 || channel > 7) return;
+    if (channel < 0 || channel >= ChMax) return;
     int pin = trigPins[channel];
     if (pin <= 7) {
         PORTD |= (1 << pin);

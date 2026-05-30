@@ -13,7 +13,7 @@ struct AppState {
   bool needsRedraw;                // Erzwingt Neuzeichnen des Displays
 
   long pulseWidth;                 // Trigger-Pulsbreite in Mikrosekunden
-  uint8_t probability[8];          // Trigger-Wahrscheinlichkeit pro Kanal in Prozent
+  uint8_t probability[ChMax];          // Trigger-Wahrscheinlichkeit pro Kanal in Prozent
   int lastBank;                    // Zuletzt angezeigte Bank (für Display-Update)
   int currentBank;                 // Aktuell ausgewählte Bank
 

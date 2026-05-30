@@ -5,11 +5,11 @@
 #include <util/atomic.h>
 
 volatile uint32_t gNextStepTick = 0xFFFFFFFF;
-volatile bool     gNextPinOn[8] = {false};
-volatile uint32_t gPwTicks[8] = {0};
-volatile uint32_t gDeadNoteTicks[8] = {0};
-volatile uint32_t gNoteOffTick[8] = {0};
-volatile bool     gPinActive[8] = {false};
+volatile bool     gNextPinOn[ChMax] = {false};
+volatile uint32_t gPwTicks[ChMax] = {0};
+volatile uint32_t gDeadNoteTicks[ChMax] = {0};
+volatile uint32_t gNoteOffTick[ChMax] = {0};
+volatile bool     gPinActive[ChMax] = {false};
 volatile bool gStepTriggered = false;
 volatile bool gHiHatLongPulseActive = false;
 volatile uint32_t gStepTicks = 2000;
@@ -38,7 +38,7 @@ namespace {
 }
 
 // Hilfstabelle: Pins für Kanal 0..7 (aus app_config.h trigPins[8])
-static const uint8_t kChannelPin[8] = {2, 3, 4, 5, 6, 7, 8, 9};
+static const uint8_t kChannelPin[ChMax] = {2, 3, 4, 5, 6, 7, 8, 9};
 
 ISR(TIMER1_COMPA_vect) {
   gSchedulerTicks++;
@@ -63,7 +63,7 @@ ISR(TIMER1_COMPA_vect) {
     uint8_t dynMaskD = 0;
     uint8_t dynMaskB = 0;
 
-    for (int ch = 0; ch < 8; ch++) {
+    for (int ch = 0; ch < ChMax; ch++) {
       if (!gNextPinOn[ch]) continue;
 
       uint8_t pin = kChannelPin[ch];
@@ -89,7 +89,7 @@ ISR(TIMER1_COMPA_vect) {
   }
 
   // 2. TRIGGER AUSSCHALTEN (pro Kanal einzeln)
-  for (int ch = 0; ch < 8; ch++) {
+  for (int ch = 0; ch < ChMax; ch++) {
     if (!gPinActive[ch]) continue;
     if (gSchedulerTicks < gNoteOffTick[ch]) continue;
     

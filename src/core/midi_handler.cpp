@@ -12,7 +12,7 @@ extern AppState state;
 // - Overflow erst nach ~50 Tagen (vs. 70 Minuten bei micros)
 // - Völlig ausreichend für Pulsbreiten im ms-Bereich
 // - Einfacherer Code ohne signed-Cast für Overflow-Handling
-static uint32_t gMidiTriggerOffTime[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+static uint32_t gMidiTriggerOffTime[ChMax] = {0, 0, 0, 0, 0, 0, 0, 0};
 static bool gMidiOhhActive = false;  // True solange OHH-Impuls aktiv ist
 
 // Hi-Hat-Kanal (CHH und OHH teilen sich Pin 8 = Kanal 6)
@@ -26,7 +26,7 @@ void midiHandlerInit(MIDI_NAMESPACE::MidiInterface<MIDI_NAMESPACE::SerialMIDI<Ha
 void checkMidiTriggerTimers() {
   uint32_t now = millis();
   
-  for (int ch = 0; ch < 8; ch++) {
+  for (int ch = 0; ch < ChMax; ch++) {
     if (gMidiTriggerOffTime[ch] != 0) {
       // Timer abgelaufen? millis()-Overflow ist nach ~50 Tagen,
       // unsigned wrap-around wird durch Subtraktion korrekt behandelt.
@@ -39,13 +39,13 @@ void checkMidiTriggerTimers() {
 }
 
 void midiTriggerOnTimed(int channel, uint32_t pulseWidthMs) {
-  if (channel < 0 || channel > 7) return;
+  if (channel < 0 || channel >= ChMax) return;
   midiTriggerOn(channel);
   gMidiTriggerOffTime[channel] = millis() + pulseWidthMs;
 }
 
 void midiTriggerOffNow(int channel) {
-  if (channel < 0 || channel > 7) return;
+  if (channel < 0 || channel >= ChMax) return;
   midiTriggerOff(channel);
   gMidiTriggerOffTime[channel] = 0;
 }

@@ -85,9 +85,9 @@ byte playChar[8] = {
 AppState state = makeDefaultAppState();
 
 void setup() {
-  // Pin-Initialisierung
-  DDRD |= 0b11111100; PORTD |= 0b11111100;
-  DDRB |= 0b00000011; PORTB |= 0b00000011;
+  // Pin-Initialisierung: Trigger-Pins D2-D9 als Output, HIGH (inaktiv)
+  DDRD |= kPortDMask; PORTD |= kPortDMask;
+  DDRB |= kPortBMask; PORTB |= kPortBMask;
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(selectBtn, INPUT_PULLUP);
   pinMode(A0, INPUT_PULLUP);
@@ -142,7 +142,7 @@ void loop() {
     // aktuellen BPM arbeiten.
     // Im Play-Modus überschreibt runSequencer() beide Werte ohnehin.
     gStepTicks = computeStepTicks(state.bpm, state.swingAmount, state.globalStep);
-    uint32_t quarterUs = 60000000UL / (uint32_t)state.bpm;
+    uint32_t quarterUs = US_PER_MINUTE / (uint32_t)state.bpm;
     uint32_t baseStepUs = quarterUs / 4UL;
     gMetronomeTicks = timerSchedulerUsToTicks(baseStepUs);
   }
