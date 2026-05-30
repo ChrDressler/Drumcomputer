@@ -5,9 +5,9 @@
 
 volatile uint32_t gNextStepTick = 0xFFFFFFFF;
 volatile bool     gNextPinOn[8] = {false};
-volatile uint32_t gPinPulseWidthTicks[8] = {0};
-volatile uint32_t gPinDeadNoteTicks[8] = {0};
-volatile uint32_t gPinOffTick[8] = {0};
+volatile uint32_t gPwTicks[8] = {0};
+volatile uint32_t gDeadNoteTicks[8] = {0};
+volatile uint32_t gNoteOffTick[8] = {0};
 volatile bool     gPinActive[8] = {false};
 volatile bool gStepTriggered = false;
 volatile bool gHiHatLongPulseActive = false;
@@ -73,8 +73,9 @@ ISR(TIMER1_COMPA_vect) {
       }
 
       // Off-Tick für diesen Kanal setzen
+      // gPwTicks[ch] wurde von sequencer.cpp bereits gesetzt
       gPinActive[ch] = true;
-      gPinOffTick[ch] = gSchedulerTicks + gPinPulseWidthTicks[ch];
+      gNoteOffTick[ch] = gSchedulerTicks + gPwTicks[ch];
     }
 
     // Alle Pins gleichzeitig auf LOW – parallele Ausgabe wie gewünscht
@@ -89,7 +90,7 @@ ISR(TIMER1_COMPA_vect) {
   // 2. TRIGGER AUSSCHALTEN (pro Kanal einzeln)
   for (int ch = 0; ch < 8; ch++) {
     if (!gPinActive[ch]) continue;
-    if (gSchedulerTicks < gPinOffTick[ch]) continue;
+    if (gSchedulerTicks < gNoteOffTick[ch]) continue;
     
     // Hi-Hat-Sonderfall: OHH-Impuls (Kanal 6) nicht vorzeitig beenden
     if (ch == 6 && gHiHatLongPulseActive) continue;
@@ -134,19 +135,19 @@ void timerSchedulerInit() {
   TIMSK1 |= (1 << OCIE1A);
 
   // Standardwert: 120 BPM entsprechen ca. 125ms pro Step
-  gStepTicks = timerSchedulerUsToTicks(125000UL);
+  gStepTicks = 250;  // 125000us / 500us = 250 Ticks
   gMetronomeTicks = gStepTicks; 
   gNextLedOnTick = gSchedulerTicks + 10;
 
-  // Dead-Node-Ticks initialisieren
-  gPinDeadNoteTicks[0] = timerSchedulerUsToTicks(500UL);  // 500us
-  gPinDeadNoteTicks[1] = timerSchedulerUsToTicks(1UL);    // LT
-  gPinDeadNoteTicks[2] = timerSchedulerUsToTicks(1UL);    // HT
-  gPinDeadNoteTicks[3] = timerSchedulerUsToTicks(500UL);
-  gPinDeadNoteTicks[4] = timerSchedulerUsToTicks(1UL);    // SN
-  gPinDeadNoteTicks[5] = timerSchedulerUsToTicks(500UL);
-  gPinDeadNoteTicks[6] = timerSchedulerUsToTicks(100UL);  // CL HH
-  gPinDeadNoteTicks[7] = timerSchedulerUsToTicks(500UL);
+  // Dead-Node-Ticks initialisieren (in Ticks à 500us)
+  gDeadNoteTicks[0] = 1;   // BD 
+  gDeadNoteTicks[1] = 1;   // LT
+  gDeadNoteTicks[2] = 1;   // HT
+  gDeadNoteTicks[3] = 1;   // 500us
+  gDeadNoteTicks[4] = 1;   // SN
+  gDeadNoteTicks[5] = 1;   // CY
+  gDeadNoteTicks[6] = 1;   // CL HH (100us aufgerundet = 500us = 1 Tick)
+  gDeadNoteTicks[7] = 2;   // Cowbell
   
   sei();
 }

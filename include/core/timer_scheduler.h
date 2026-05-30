@@ -10,10 +10,13 @@ extern volatile bool     gNextPinOn[8];  // Welcher Pin soll beim nächsten Step
 extern volatile bool gStepTriggered;
 extern volatile uint32_t gStepTicks;
 
-// Per-Channel Pulsbreiten (in Ticks), Dead-Node-Ticks und Off-Timer
-extern volatile uint32_t gPinPulseWidthTicks[8];
-extern volatile uint32_t gPinDeadNoteTicks[8];  // Dead-Node-Pulsbreite pro Kanal
-extern volatile uint32_t gPinOffTick[8];
+// Per-Channel Pulsbreiten (in Ticks) und Off-Timer
+// gPwTicks[ch] wird von sequencer.cpp gesetzt (Anzahl Ticks ab Step-Start)
+// gNoteOffTick[ch] wird von sequencer.cpp als absoluter Tick-Zeitpunkt berechnet
+// gPinActive[ch] wird von der ISR verwaltet (true = Pin ist gerade LOW)
+extern volatile uint32_t gPwTicks[8];
+extern volatile uint32_t gDeadNoteTicks[8];  // Dead-Node-Pulsbreite pro Kanal
+extern volatile uint32_t gNoteOffTick[8];
 extern volatile bool     gPinActive[8];
 
 extern volatile uint32_t gNextLedTick;

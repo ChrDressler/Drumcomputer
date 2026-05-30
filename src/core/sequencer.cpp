@@ -92,29 +92,34 @@ void runSequencer(
     }
 
     // --- 2. PULSBREITEN PRO KANAL SETZEN ---
+    // gPwTicks[ch] wird für jeden aktiven Kanal gesetzt.
+    // Die ISR addiert dann gPwTicks[ch] zum aktuellen Scheduler-Tick,
+    // um den absoluten Off-Tick zu berechnen.
+    //
     // Dead-Node-Maske ist in Bits 16-31 jedes Kanal-Pattern-Worts
-    // Jeder Kanal kann einzeln ein O haben und bekommt dann gPinDeadNoteTicks[ch]
+    // Jeder Kanal kann einzeln ein O haben und bekommt dann gDeadNoteTicks[ch]
     uint32_t pwDefaultTicks = timerSchedulerUsToTicks((uint32_t)pulseWidth);
-    uint32_t pwChhTicks = timerSchedulerUsToTicks(2000UL);
+    uint32_t pwChhTicks = 4;  // 2000us / 500us = 4 Ticks
 
     for (int ch = 0; ch < 8; ch++) {
-      if (ch == 6) {
+      if (!gNextPinOn[ch]) {
+        gPwTicks[ch] = 0;
+        continue;
+      }
+
+      if (ch == 6 && gHiHatLongPulseActive) {
+        // OHH: Pulsbreite = Standard (wird aber von der ISR ignoriert,
+        // weil gHiHatLongPulseActive=true → kein Off-Timer)
+        gPwTicks[6] = pwDefaultTicks;
+      } else if (ch == 6) {
         // CHH-Sonderfall: Dead Note aus dem eigenen Pattern-Wort
         uint32_t chhWordLocal = getBankPatternWord((uint8_t)currentBank, 6, (uint8_t)currentBar);
         bool chhDead = (chhWordLocal >> (31 - localStep)) & 1;  // Bits 16-31
-        if (chhDead) {
-          gPinPulseWidthTicks[6] = gPinDeadNoteTicks[6];
-        } else {
-          gPinPulseWidthTicks[6] = pwChhTicks;
-        }
+        gPwTicks[6] = chhDead ? gDeadNoteTicks[6] : pwChhTicks;
       } else {
         uint32_t patWord = getBankPatternWord((uint8_t)currentBank, (uint8_t)ch, (uint8_t)currentBar);
         bool isDead = (patWord >> (31 - localStep)) & 1;  // Bits 16-31 = Dead-Node-Maske
-        if (isDead) {
-          gPinPulseWidthTicks[ch] = gPinDeadNoteTicks[ch];
-        } else {
-          gPinPulseWidthTicks[ch] = pwDefaultTicks;
-        }
+        gPwTicks[ch] = isDead ? gDeadNoteTicks[ch] : pwDefaultTicks;
       }
     }
 
