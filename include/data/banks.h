@@ -14,13 +14,15 @@ extern const int NUM_BANKS;
 uint8_t getBankStepsPerBar(uint8_t bankIndex);
 
 /**
- * @brief Liest ein 16-Bit-Patternwort aus PROGMEM.
+ * @brief Liest ein 32-Bit-Patternwort aus PROGMEM.
  * @param bankIndex Index der Bank.
  * @param channel Kanalindex (0..7).
  * @param bar Taktindex innerhalb der Bank (0..3).
- * @return Das gelesene 16-Bit-Patternwort.
+ * @return Das gelesene 32-Bit-Patternwort.
+ *         Bits 0-15 = Hit-Maske (X oder O = 1)
+ *         Bits 16-31 = Dead-Node-Maske (nur O = 1)
  */
-uint16_t getBankPatternWord(uint8_t bankIndex, uint8_t channel, uint8_t bar);
+uint32_t getBankPatternWord(uint8_t bankIndex, uint8_t channel, uint8_t bar);
 
 /**
  * @brief Kopiert den Banknamen aus PROGMEM in einen RAM-Puffer.

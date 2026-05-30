@@ -6,11 +6,18 @@
 static const uint16_t TIMER_SCHEDULER_TICK_US = 500;
 
 extern volatile uint32_t gNextStepTick;
-extern volatile uint8_t gNextMaskD;
-extern volatile uint8_t gNextMaskB;
-extern volatile uint32_t gPulseWidthTicks;
+extern volatile bool     gNextPinOn[8];  // Welcher Pin soll beim nächsten Step auslösen
 extern volatile bool gStepTriggered;
 extern volatile uint32_t gStepTicks;
+
+// Per-Channel Pulsbreiten (in Ticks) und Off-Timer
+// gPwTicks[ch] wird von sequencer.cpp gesetzt (Anzahl Ticks ab Step-Start)
+// gNoteOffTick[ch] wird von sequencer.cpp als absoluter Tick-Zeitpunkt berechnet
+// gPinActive[ch] wird von der ISR verwaltet (true = Pin ist gerade LOW)
+extern volatile uint32_t gPwTicks[8];
+extern volatile uint32_t gDeadNoteTicks[8];  // Dead-Node-Pulsbreite pro Kanal
+extern volatile uint32_t gNoteOffTick[8];
+extern volatile bool     gPinActive[8];
 
 extern volatile uint32_t gNextLedTick;
 extern volatile uint32_t gNextLedOnTick;

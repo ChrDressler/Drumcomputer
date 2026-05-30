@@ -3,10 +3,12 @@
 #include <avr/interrupt.h>
 #include <util/atomic.h>
 
-volatile uint32_t gNextStepTick = 0xFFFFFFFF; 
-volatile uint8_t gNextMaskD = 0;
-volatile uint8_t gNextMaskB = 0;
-volatile uint32_t gPulseWidthTicks = 20;
+volatile uint32_t gNextStepTick = 0xFFFFFFFF;
+volatile bool     gNextPinOn[8] = {false};
+volatile uint32_t gPwTicks[8] = {0};
+volatile uint32_t gDeadNoteTicks[8] = {0};
+volatile uint32_t gNoteOffTick[8] = {0};
+volatile bool     gPinActive[8] = {false};
 volatile bool gStepTriggered = false;
 volatile bool gHiHatLongPulseActive = false;
 volatile uint32_t gStepTicks = 2000;
@@ -32,9 +34,10 @@ static uint32_t gNextLedOffTick = 0xFFFFFFFF;
 // Interne Variablen für die ISR
 namespace {
     volatile uint32_t gSchedulerTicks = 0;
-    volatile uint32_t gTriggerOffTick = 0;
-    volatile bool gTriggersActive = false;
 }
+
+// Hilfstabelle: Pins für Kanal 0..7 (aus app_config.h trigPins[8])
+static const uint8_t kChannelPin[8] = {2, 3, 4, 5, 6, 7, 8, 9};
 
 ISR(TIMER1_COMPA_vect) {
   gSchedulerTicks++;
@@ -54,28 +57,51 @@ ISR(TIMER1_COMPA_vect) {
   }
 
   // 1. SOUND AUSLÖSEN (Nutzt gStepTicks mit Swing)
+  // Baut dynamisch die Portmasken aus gNextPinOn[] und schaltet alle gleichzeitig
   if (gSchedulerTicks >= gNextStepTick) {
-    PORTD &= ~gNextMaskD;
-    PORTB &= ~gNextMaskB;
+    uint8_t dynMaskD = 0;
+    uint8_t dynMaskB = 0;
+
+    for (int ch = 0; ch < 8; ch++) {
+      if (!gNextPinOn[ch]) continue;
+
+      uint8_t pin = kChannelPin[ch];
+      if (pin <= 7) {
+        dynMaskD |= (1 << pin);
+      } else {
+        dynMaskB |= (1 << (pin - 8));
+      }
+
+      // Off-Tick für diesen Kanal setzen
+      // gPwTicks[ch] wurde von sequencer.cpp bereits gesetzt
+      gPinActive[ch] = true;
+      gNoteOffTick[ch] = gSchedulerTicks + gPwTicks[ch];
+    }
+
+    // Alle Pins gleichzeitig auf LOW – parallele Ausgabe wie gewünscht
+    PORTD &= ~dynMaskD;
+    PORTB &= ~dynMaskB;
     
     gNextStepTick += gStepTicks; 
-
-    gTriggerOffTick = gSchedulerTicks + gPulseWidthTicks;
-    gTriggersActive = true;
 
     gStepTriggered = true;
   }
 
-  // 2. TRIGGER AUSSCHALTEN
-  if (gTriggersActive && gSchedulerTicks >= gTriggerOffTick) {
-      PORTD |= 0b11111100;
-      PORTB |= 0b00000011;
-      // Open HH: HH-Pin (Pin 8 = PORTB Bit 0) LOW halten, solange OHH aktiv ist.
-      // Der lange Impuls bleibt bestehen bis ein CHH-Step das Flag loescht.
-      if (gHiHatLongPulseActive) {
-          PORTB &= ~kHiHatMaskB;
-      }
-      gTriggersActive = false;
+  // 2. TRIGGER AUSSCHALTEN (pro Kanal einzeln)
+  for (int ch = 0; ch < 8; ch++) {
+    if (!gPinActive[ch]) continue;
+    if (gSchedulerTicks < gNoteOffTick[ch]) continue;
+    
+    // Hi-Hat-Sonderfall: OHH-Impuls (Kanal 6) nicht vorzeitig beenden
+    if (ch == 6 && gHiHatLongPulseActive) continue;
+    
+    uint8_t pin = kChannelPin[ch];
+    if (pin <= 7) {
+      PORTD |= (1 << pin);
+    } else {
+      PORTB |= (1 << (pin - 8));
+    }
+    gPinActive[ch] = false;
   }
   
   gPotDivider++;
@@ -109,9 +135,19 @@ void timerSchedulerInit() {
   TIMSK1 |= (1 << OCIE1A);
 
   // Standardwert: 120 BPM entsprechen ca. 125ms pro Step
-  gStepTicks = timerSchedulerUsToTicks(125000UL);
+  gStepTicks = 250;  // 125000us / 500us = 250 Ticks
   gMetronomeTicks = gStepTicks; 
   gNextLedOnTick = gSchedulerTicks + 10;
+
+  // Dead-Node-Ticks initialisieren (in Ticks à 500us)
+  gDeadNoteTicks[0] = 1;   // BD 
+  gDeadNoteTicks[1] = 1;   // LT
+  gDeadNoteTicks[2] = 1;   // HT
+  gDeadNoteTicks[3] = 1;   // 500us
+  gDeadNoteTicks[4] = 1;   // SN
+  gDeadNoteTicks[5] = 1;   // CY
+  gDeadNoteTicks[6] = 1;   // CL HH (100us aufgerundet = 500us = 1 Tick)
+  gDeadNoteTicks[7] = 2;   // Cowbell
   
   sei();
 }
