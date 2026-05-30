@@ -1,4 +1,5 @@
 #include "core/timer_scheduler.h"
+#include "core/app_config.h"
 
 #include <avr/interrupt.h>
 #include <util/atomic.h>
@@ -42,17 +43,17 @@ static const uint8_t kChannelPin[8] = {2, 3, 4, 5, 6, 7, 8, 9};
 ISR(TIMER1_COMPA_vect) {
   gSchedulerTicks++;
 
-  // --- AUTARKES METRONOM (LED PIN 13) ---
+  // --- AUTARKES METRONOM (LED_BUILTIN = Pin 13) ---
   // Nutzt gMetronomeTicks (immer straight), NICHT gStepTicks!
   // Dadurch bleibt die LED auch bei Achtel- oder 16tel-Swing stabil.
   if (gSchedulerTicks >= gNextLedOnTick) {
-      digitalWrite(13, HIGH);
+      digitalWrite(LED_BUILTIN, HIGH);
       gNextLedOffTick = gSchedulerTicks + kLedFlashDurationTicks;
       gNextLedOnTick = gSchedulerTicks + (gMetronomeTicks * 4);
   }
 
   if (gSchedulerTicks >= gNextLedOffTick) {
-      digitalWrite(13, LOW);
+      digitalWrite(LED_BUILTIN, LOW);
       gNextLedOffTick = 0xFFFFFFFF;
   }
 
@@ -92,8 +93,8 @@ ISR(TIMER1_COMPA_vect) {
     if (!gPinActive[ch]) continue;
     if (gSchedulerTicks < gNoteOffTick[ch]) continue;
     
-    // Hi-Hat-Sonderfall: OHH-Impuls (Kanal 6) nicht vorzeitig beenden
-    if (ch == 6 && gHiHatLongPulseActive) continue;
+    // Hi-Hat-Sonderfall: OHH-Impuls (Kanal ChHH) nicht vorzeitig beenden
+    if (ch == ChHH && gHiHatLongPulseActive) continue;
     
     uint8_t pin = kChannelPin[ch];
     if (pin <= 7) {
@@ -140,16 +141,16 @@ void timerSchedulerInit() {
   gNextLedOnTick = gSchedulerTicks + 10;
 
   // Dead-Node-Ticks initialisieren (in Ticks à 500us)
-  gDeadNoteTicks[0] = 1;   // BD 
-  gDeadNoteTicks[1] = 1;   // LT
-  gDeadNoteTicks[2] = 1;   // HT
-  gDeadNoteTicks[3] = 1;   // 500us
-  gDeadNoteTicks[4] = 1;   // SN
-  gDeadNoteTicks[5] = 1;   // CY
-  gDeadNoteTicks[6] = 1;   // CL HH (100us aufgerundet = 500us = 1 Tick)
-  gDeadNoteTicks[7] = 2;   // Cowbell
+  gDeadNoteTicks[ChBD] = 1;
+  gDeadNoteTicks[ChLT] = 1;
+  gDeadNoteTicks[ChHT] = 1;
+  gDeadNoteTicks[ChCL] = 1;
+  gDeadNoteTicks[ChSN] = 1;
+  gDeadNoteTicks[ChCY] = 1;
+  gDeadNoteTicks[ChHH] = 1;
+  gDeadNoteTicks[ChCB] = 2;
   
-  sei();
+  sei(); // Set Enable Interrupts
 }
 
 uint32_t timerSchedulerNowTicks() {

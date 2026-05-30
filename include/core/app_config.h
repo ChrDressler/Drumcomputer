@@ -4,6 +4,17 @@
 
 enum MenuMode { MENU_ROOT, PLAY, EDIT_BANK, EDIT_PULSE, INFO, MIDI_MONITOR };
 
+// Channel-Konstanten (8 Kanäle + OHH als Index 8)
+static const int ChBD = 0;   // Bassdrum
+static const int ChLT = 1;   // Low Tom
+static const int ChHT = 2;   // High Tom
+static const int ChCL = 3;   // Claves
+static const int ChSN = 4;   // Snare
+static const int ChCY = 5;   // Cymbal
+static const int ChHH = 6;   // Hi-Hat (CHH + OHH teilen sich Pin 8)
+static const int ChCB = 7;   // Cowbell
+static const int ChOH = 8;   // Open Hi-Hat (Spezial-Index, teilt Pin mit ChHH)
+
 struct Bank {
   // WICHTIG: Der Bankname wird direkt in PROGMEM als festes char-Array gespeichert.
   // Früher war hier ein const char* und der Zugriff über PROGMEM-Pointer war fehleranfällig.

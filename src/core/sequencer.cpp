@@ -14,7 +14,7 @@ void sequencerStart(int& globalStep) {
   gNextLedOnTick = startAnchor;
 
   // LED-STATUS: Sicherstellen, dass die LED aus ist, bevor der Blitz kommt
-  digitalWrite(13, LOW);
+  digitalWrite(LED_BUILTIN, LOW);
 }
 
 uint32_t computeStepTicks(int bpm, float swingAmount, int globalStep) {
@@ -60,28 +60,28 @@ void runSequencer(
     int currentBar = globalStep / stepsPerBar;
     int localStep = globalStep % stepsPerBar;
 
-    // CHH (Kanal 6) und OHH (Index 8) vorab prüfen für HH-Logik
+    // CHH (ChHH) und OHH (ChOH) vorab prüfen für HH-Logik
     // Pattern-Word: Bits 0-15 = Hit-Maske, Bits 16-31 = Dead-Node-Maske
-    uint32_t chhWord = getBankPatternWord((uint8_t)currentBank, 6, (uint8_t)currentBar);
-    uint32_t ohhWord = getBankPatternWord((uint8_t)currentBank, 8, (uint8_t)currentBar);
-    bool chhHit = ((chhWord >> (15 - localStep)) & 1) && (random(0, 101) <= probability[6]);
-    bool ohhHit = ((ohhWord >> (15 - localStep)) & 1) && (random(0, 101) <= probability[6]);
+    uint32_t chhWord = getBankPatternWord((uint8_t)currentBank, ChHH, (uint8_t)currentBar);
+    uint32_t ohhWord = getBankPatternWord((uint8_t)currentBank, ChOH, (uint8_t)currentBar);
+    bool chhHit = ((chhWord >> (15 - localStep)) & 1) && (random(0, 101) <= probability[ChHH]);
+    bool ohhHit = ((ohhWord >> (15 - localStep)) & 1) && (random(0, 101) <= probability[ChHH]);
 
     // Open HH-Logik:
-    // - OHH-Step: langen Impuls starten (Flag setzen, Kanal 6 aktivieren)
+    // - OHH-Step: langen Impuls starten (Flag setzen, Kanal ChHH aktivieren)
     // - CHH-Step: kurzen Impuls ausgeben UND langen OHH-Impuls beenden (Flag loeschen)
     // - Kein HH-Step: OHH-Zustand unveraendert lassen
     if (ohhHit) {
-      gNextPinOn[6] = true;
+      gNextPinOn[ChHH] = true;
       gHiHatLongPulseActive = true;
     } else if (chhHit) {
-      gNextPinOn[6] = true;
+      gNextPinOn[ChHH] = true;
       gHiHatLongPulseActive = false;
     }
-    // Wenn weder CHH noch OHH: Kanal 6 nicht aktiv – OHH-Zustand bleibt erhalten
+    // Wenn weder CHH noch OHH: Kanal ChHH nicht aktiv – OHH-Zustand bleibt erhalten
 
     for (int ch = 0; ch < 8; ch++) {
-      if (ch == 6) continue; // HH bereits oben behandelt
+      if (ch == ChHH) continue; // HH bereits oben behandelt
       uint32_t patternWord = getBankPatternWord((uint8_t)currentBank, (uint8_t)ch, (uint8_t)currentBar);
       // Bits 0-15 = Hit-Maske
       if ((patternWord >> (15 - localStep)) & 1) {
@@ -107,15 +107,15 @@ void runSequencer(
         continue;
       }
 
-      if (ch == 6 && gHiHatLongPulseActive) {
+      if (ch == ChHH && gHiHatLongPulseActive) {
         // OHH: Pulsbreite = Standard (wird aber von der ISR ignoriert,
         // weil gHiHatLongPulseActive=true → kein Off-Timer)
-        gPwTicks[6] = pwDefaultTicks;
-      } else if (ch == 6) {
+        gPwTicks[ChHH] = pwDefaultTicks;
+      } else if (ch == ChHH) {
         // CHH-Sonderfall: Dead Note aus dem eigenen Pattern-Wort
-        uint32_t chhWordLocal = getBankPatternWord((uint8_t)currentBank, 6, (uint8_t)currentBar);
+        uint32_t chhWordLocal = getBankPatternWord((uint8_t)currentBank, ChHH, (uint8_t)currentBar);
         bool chhDead = (chhWordLocal >> (31 - localStep)) & 1;  // Bits 16-31
-        gPwTicks[6] = chhDead ? gDeadNoteTicks[6] : pwChhTicks;
+        gPwTicks[ChHH] = chhDead ? gDeadNoteTicks[ChHH] : pwChhTicks;
       } else {
         uint32_t patWord = getBankPatternWord((uint8_t)currentBank, (uint8_t)ch, (uint8_t)currentBar);
         bool isDead = (patWord >> (31 - localStep)) & 1;  // Bits 16-31 = Dead-Node-Maske

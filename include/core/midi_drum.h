@@ -16,46 +16,46 @@ inline int midiNoteToChannel(byte pitch) {
         // Bass Drum
         case 35:  // Acoustic Bass Drum
         case 36:  // Bass Drum 1
-            return 0;
+            return ChBD;
 
         // Low Tom
         case 41:  // Low Floor Tom
         case 43:  // High Floor Tom
-            return 1;
+            return ChLT;
 
         // High Tom
         case 45:  // Low Tom
         case 47:  // Low-Mid Tom
         case 48:  // High-Mid Tom
         case 50:  // High Tom
-            return 2;
+            return ChHT;
 
         // Claves
         case 54:  // Claves. Im GM 75, ist aber zu weit weg
-            return 3;
+            return ChCL;
 
         // Snare
         case 38:  // Acoustic Snare
         case 40:  // Electric Snare
-            return 4;
+            return ChSN;
 
         // Crash Cymbal
         case 49:  // Crash Cymbal 1
         case 57:  // Crash Cymbal 2
-            return 5;
+            return ChCY;
 
         // Closed Hi-Hat (gleicher Pin wie OHH, Pin 8)
         case 42:  // Closed Hi-Hat
         case 44:  // Pedal Hi-Hat
-            return 6;
+            return ChHH;
 
         // Cowbell
         case 56:  // Cowbell
-            return 7;
+            return ChCB;
 
         // Open Hi-Hat (gleicher Pin wie CHH, Pin 8)
         case 46:  // Open Hi-Hat
-            return 8;  // Spezial-Index für OHH
+            return ChOH;  // Spezial-Index für OHH
 
         default:
             return -1;  // Nicht gemappt

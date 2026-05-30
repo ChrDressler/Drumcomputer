@@ -16,7 +16,7 @@ static uint32_t gMidiTriggerOffTime[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 static bool gMidiOhhActive = false;  // True solange OHH-Impuls aktiv ist
 
 // Hi-Hat-Kanal (CHH und OHH teilen sich Pin 8 = Kanal 6)
-static const int kHiHatChannel = 6;
+static const int kHiHatChannel = ChHH;
 
 void midiHandlerInit(MIDI_NAMESPACE::MidiInterface<MIDI_NAMESPACE::SerialMIDI<HardwareSerial>>& midiRef) {
   midiRef.setHandleNoteOn(handleNoteOn);
@@ -71,7 +71,7 @@ void handleNoteOn(byte channel, byte pitch, byte velocity) {
   uint32_t pulseMs = (uint32_t)state.pulseWidth / 1000UL;
   if (pulseMs < 1) pulseMs = 1; // Mindestens 1ms
 
-  if (ch == 8) {
+  if (ch == ChOH) {
     // Open Hi-Hat (Note 46): Pin einschalten, OHH-Flag setzen.
     // KEIN Timer! OHH bleibt aktiv bis CHH (Note 42/44) kommt.
     // Das ist das Standard-GM-Verhalten: OHH wird durch CHH beendet.

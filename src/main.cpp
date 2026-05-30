@@ -38,14 +38,14 @@ static AppState makeDefaultAppState() {
   s.needsRedraw = true;
 
   s.pulseWidth = 10000;
-  s.probability[0] = 100;
-  s.probability[1] = 100;
-  s.probability[2] = 100;
-  s.probability[3] = 100;
-  s.probability[4] = 100;
-  s.probability[5] = 100;
-  s.probability[6] = 100;
-  s.probability[7] = 100;
+  s.probability[ChBD] = 100;
+  s.probability[ChLT] = 100;
+  s.probability[ChHT] = 100;
+  s.probability[ChCL] = 100;
+  s.probability[ChSN] = 100;
+  s.probability[ChCY] = 100;
+  s.probability[ChHH] = 100;
+  s.probability[ChCB] = 100;
   s.lastBank = 0;
   s.currentBank = 0;
 
@@ -137,11 +137,14 @@ void loop() {
     state.bpm = (int)map(analogRead(potPinBPM), 0, 1023, 40, 200);
     state.swingAmount = (analogRead(potPinSwing) / 1023.0) * 0.4;
 
-    // gStepTicks auch im Stop-Zustand setzen (für LED-Metronom + initiales Timing).
-    // Waehrend des Abspielens setzt runSequencer() beide Werte neu.
-    if (!state.isRunning) {
-      gStepTicks = computeStepTicks(state.bpm, state.swingAmount, state.globalStep);
-    }
+    // gStepTicks und gMetronomeTicks immer setzen – auch im Stop,
+    // damit das Metronom (LED 13) und der nächste Start mit dem
+    // aktuellen BPM arbeiten.
+    // Im Play-Modus überschreibt runSequencer() beide Werte ohnehin.
+    gStepTicks = computeStepTicks(state.bpm, state.swingAmount, state.globalStep);
+    uint32_t quarterUs = 60000000UL / (uint32_t)state.bpm;
+    uint32_t baseStepUs = quarterUs / 4UL;
+    gMetronomeTicks = timerSchedulerUsToTicks(baseStepUs);
   }
 
   // Eingehende MIDI-Nachrichten verarbeiten (ruft handleNoteOn/handleNoteOff auf)
