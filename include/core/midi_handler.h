@@ -10,24 +10,10 @@
  */
 void midiHandlerInit(MIDI_NAMESPACE::MidiInterface<MIDI_NAMESPACE::SerialMIDI<HardwareSerial>>& midiRef);
 
-/**
- * @brief Prüft, ob MIDI-Trigger-Timer abgelaufen sind, und schaltet die Pins aus.
- * Muss regelmässig in loop() aufgerufen werden.
- */
-void checkMidiTriggerTimers();
-
-/**
- * @brief MIDI-Trigger einschalten mit automatischem Timer-Ausschalten.
- * @param channel Kanalindex (0..7).
- * @param pulseWidthUs Pulsbreite in Mikrosekunden.
- */
-void midiTriggerOnTimed(int channel, uint32_t pulseWidthUs);
-
-/**
- * @brief MIDI-Trigger sofort ausschalten und Timer löschen.
- * @param channel Kanalindex (0..7).
- */
-void midiTriggerOffNow(int channel);
+// Die MIDI-Trigger-Timer wurden in midi_timer.h/.cpp ausgelagert.
+// Statt checkMidiTriggerTimers(), midiTriggerOnTimed() und midiTriggerOffNow()
+// werden jetzt midiTimerArm() und midiTimerDisarm() aus midi_timer.h verwendet.
+// Der Timer2-ISR (100 µs Auflösung) läuft unabhängig von loop()-Blockaden.
 
 /**
  * @brief Callback für MIDI Note On.
