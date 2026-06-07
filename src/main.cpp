@@ -24,7 +24,6 @@ A1/A2 Potis.
 #include "core/timer_scheduler.h"
 #include "core/midi_drum.h"
 #include "core/midi_handler.h"
-#include "core/midi_timer.h"
 
 LiquidCrystal_I2C MenuDisplay(0x27, 20, 4);
 Encoder MenuEncoder(12, 11);
@@ -100,7 +99,6 @@ void setup() {
   randomSeed(analogRead(A2)); 
 
   timerSchedulerInit();
-  midiTimerInit();
 
   // Bank aus EEPROM lesen
   state.currentBank = EEPROM.read(bankAddr);
@@ -152,9 +150,8 @@ void loop() {
   // Eingehende MIDI-Nachrichten verarbeiten (ruft handleNoteOn/handleNoteOff auf)
   MIDI.read();
 
-  // MIDI-Trigger-Timer laufen jetzt im Timer2-ISR (midi_timer.cpp),
-  // unabhängig von loop()-Blockaden durch Display-Updates.
-  // Daher ist checkMidiTriggerTimers() hier nicht mehr nötig.
+  // MIDI-Trigger-Timer prüfen: Schaltet Pins nach state.pulseWidth automatisch aus
+  checkMidiTriggerTimers();
 
   runSequencer(
     state.bpm,
